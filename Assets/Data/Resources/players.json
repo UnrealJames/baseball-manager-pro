@@ -1,0 +1,24 @@
+{
+  "players": [
+    {
+      "id": 1,
+      "firstName": "Aaron",
+      "lastName": "Judkins",
+      "position": "RF",
+      "age": 31,
+      "overall": 97,
+      "contact": 85,
+      "power": 99,
+      "speed": 70,
+      "arm": 95,
+      "fielding": 88,
+      "pitching": 0,
+      "stamina": 0,
+      "salary": 40.0,
+      "contractYears": 3,
+      "team": "NYA",
+      "isInjured": false,
+      "injuryDays": 0
+    }
+  ]
+}
