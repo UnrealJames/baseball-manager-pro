@@ -147,6 +147,11 @@ public class UIBuilder : MonoBehaviour
     Player lastHomePitcher  = null;
     Player lastAwayPitcher  = null;
 
+    // Pitcher of record for this game
+    Player gameWinningPitcher = null;
+    Player gameLosingPitcher  = null;
+
+
 
     // -------------------------------------------------------
     // START
@@ -3463,8 +3468,10 @@ public class UIBuilder : MonoBehaviour
         gameInProgress   = true;
         gameOver         = false;
         usedRelievers.Clear();
-        lastHomePitcher = null;
-        lastAwayPitcher = null;
+        lastHomePitcher    = null;
+        lastAwayPitcher    = null;
+        gameWinningPitcher = null;
+        gameLosingPitcher  = null;
 
         homeInningRuns = new int[12];
         awayInningRuns = new int[12];
@@ -4282,14 +4289,29 @@ public class UIBuilder : MonoBehaviour
             }
         }
 
-        // If nobody gave up any earned runs
-        // = No Decision for everyone on losing team
+        // Nobody gave up earned runs —
+        // give L to pitcher who gave up most hits
         if (maxER == 0)
         {
-            losePitcher = null;
-            Debug.Log("NO DECISION — losing team" +
-                      " gave up 0 earned runs." +
-                      " Unearned run loss.");
+            int maxHits = 0;
+            foreach (Player p in allLosePitchers)
+            {
+                if (p.hitsAllowed > maxHits)
+                {
+                    maxHits     = p.hitsAllowed;
+                    losePitcher = p;
+                }
+            }
+
+            // If still null — starter gets L
+            if (losePitcher == null &&
+                allLosePitchers.Count > 0)
+                losePitcher = allLosePitchers[0];
+
+            if (losePitcher != null)
+                Debug.Log("L by hits allowed: " +
+                    losePitcher.FullName() +
+                    " H:" + losePitcher.hitsAllowed);
         }
 
         // Credit win
@@ -4297,24 +4319,24 @@ public class UIBuilder : MonoBehaviour
         {
             winPitcher.wins++;
             winPitcher.seasonWins++;
+            gameWinningPitcher = winPitcher;
             AddPlay("W: " + winPitcher.FullName() +
-                    " (" + winPitcher.seasonWins +
-                    "-" + winPitcher.seasonLosses + ")");
+                    "  L: " + (losePitcher != null ?
+                    losePitcher.FullName() : "—"));
             Debug.Log("WIN: " + winPitcher.FullName() +
                       " IP:" + winPitcher.inningsPitched +
                       " ER:" + winPitcher.earnedRuns +
                       " ERA:" +
-                      winPitcher.SeasonERA().ToString("F2"));
+                      winPitcher.SeasonERA()
+                          .ToString("F2"));
         }
 
-        // Credit loss — no decision if nobody qualifies
+        // Credit loss
         if (losePitcher != null)
         {
             losePitcher.losses++;
             losePitcher.seasonLosses++;
-            AddPlay("L: " + losePitcher.FullName() +
-                    " (" + losePitcher.seasonWins +
-                    "-" + losePitcher.seasonLosses + ")");
+            gameLosingPitcher = losePitcher;
             Debug.Log("LOSS: " +
                       losePitcher.FullName() +
                       " IP:" + losePitcher.inningsPitched +
@@ -4325,8 +4347,7 @@ public class UIBuilder : MonoBehaviour
         }
         else
         {
-            Debug.Log("No decision — no pitcher" +
-                      " clearly responsible for loss");
+            Debug.Log("NO DECISION — 0 ER loss");
         }
     }
 
@@ -5009,16 +5030,10 @@ public class UIBuilder : MonoBehaviour
             if (i < batters.Count)
             {
                 Player p = batters[i];
-                // Show W/L next to pitcher name
-                string pitRecord = "";
-                if (p.wins > 0 || p.losses > 0)
-                    pitRecord = p.wins > p.losses
-                        ? " (W " + p.seasonWins + "-" +
-                          p.seasonLosses + ")"
-                        : " (L " + p.seasonWins + "-" +
-                          p.seasonLosses + ")";
-                SetBSRowText(row, "Name",
-                    p.FullName() + pitRecord);
+                // Show W or L for pitcher of record
+                // Compare by ID since object
+                // reference may differ after roster ops
+                SetBSRowText(row, "Name", p.FullName());
                 SetBSRowText(row, "AB",
                     p.atBats.ToString());
                 SetBSRowText(row, "H",
@@ -5054,6 +5069,9 @@ public class UIBuilder : MonoBehaviour
         SetBSText("HRLog",
             hrLog != "" ? "HR: " + hrLog : "");
 
+        
+
+
         // Pitchers
         List<Player> pitchers = new List<Player>();
         if (showTeam?.roster != null)
@@ -5062,7 +5080,43 @@ public class UIBuilder : MonoBehaviour
                 p => (p.position == "SP" ||
                       p.position == "RP") &&
                      p.inningsPitched > 0);
+
+            // Sort — starter first then relievers
+            pitchers.Sort((a, b) =>
+                b.inningsPitched.CompareTo(
+                    a.inningsPitched));
         }
+
+        // Also check if winning/losing pitcher
+        // is on the team being shown
+        bool showingWinTeam =
+            (boxScoreShowingHome &&
+             homeTeam == GetMyTeam() &&
+             homeScore > awayScore) ||
+            (!boxScoreShowingHome &&
+             awayTeam == GetMyTeam() &&
+             awayScore > homeScore) ||
+            (boxScoreShowingHome &&
+             homeTeam != GetMyTeam() &&
+             awayScore > homeScore) ||
+            (!boxScoreShowingHome &&
+             awayTeam != GetMyTeam() &&
+             homeScore > awayScore);
+
+        Debug.Log("Pitchers found: " +
+            pitchers.Count +
+            " winP=" +
+            (gameWinningPitcher?.FullName() ?? "null") +
+            " loseP=" +
+            (gameLosingPitcher?.FullName() ?? "null"));
+
+        Debug.Log("=== BOX SCORE PITCHER CHECK ===");
+        Debug.Log("winP=" + (gameWinningPitcher?.FullName() ?? "NULL"));
+        Debug.Log("loseP=" + (gameLosingPitcher?.FullName() ?? "NULL"));
+        foreach (Player pit in pitchers)
+            Debug.Log("Pitcher in list: " + pit.FullName());
+
+
 
         for (int i = 0; i < 3; i++)
         {
@@ -5073,7 +5127,15 @@ public class UIBuilder : MonoBehaviour
             if (i < pitchers.Count)
             {
                 Player p = pitchers[i];
-                SetBSRowText(row, "Name", p.FullName());
+                string pName = p.FullName();
+                string dec = "";
+                if (gameWinningPitcher != null &&
+                    pName == gameWinningPitcher.FullName())
+                    dec = " (W)";
+                else if (gameLosingPitcher != null &&
+                    pName == gameLosingPitcher.FullName())
+                    dec = " (L)";
+                SetBSRowText(row, "Name", pName + dec);
                 SetBSRowText(row, "IP",
                     p.inningsPitched.ToString());
                 SetBSRowText(row, "H",
@@ -5132,12 +5194,19 @@ public class UIBuilder : MonoBehaviour
                 tmp.color = playerWon ? GREEN : RED;
         }
 
-        // Default to player's team
-        boxScoreShowingHome = (home == GetMyTeam());
-        RefreshBoxScoreRows();
+        // Default to showing player's team
+        // regardless of home/away
+        Team myTeam = GetMyTeam();
+        if (home == myTeam)
+            boxScoreShowingHome = true;
+        else
+            boxScoreShowingHome = false;
         SetBSTabColors();
-
         ShowScreen(boxScoreScreen);
+
+        // Refresh AFTER screen shown so pitcher
+        // W/L references are set
+        RefreshBoxScoreRows();
     }
 
     void SetBSText(string objName, string value)
