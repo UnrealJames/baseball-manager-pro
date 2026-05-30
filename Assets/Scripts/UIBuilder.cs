@@ -33,6 +33,8 @@ public class UIBuilder : MonoBehaviour
     GameObject liveGameScreen;
     GameObject boxScoreScreen;
     GameObject currentScreen;
+    GameObject preGameScreen;
+
 
     // Data
     DataLoader dataLoader;
@@ -126,8 +128,25 @@ public class UIBuilder : MonoBehaviour
     float         sbColStart      = -118f;
     float         sbColW          = 26f;
 
+
+    // Pre-game
+    Team         pgHomeTeam      = null;
+    Team         pgAwayTeam      = null;
+    int          pgHomeLineupIdx = 0;
+    int          pgAwayLineupIdx = 0;
+    bool         pgShowingHome   = true;
+    int          pgGameNumber    = 1;
+    List<Player> pgHomeLineup    = new List<Player>();
+    List<Player> pgAwayLineup    = new List<Player>();
+
+
     // Box score
     bool boxScoreShowingHome = true;
+
+    // Track pitcher of record
+    Player lastHomePitcher  = null;
+    Player lastAwayPitcher  = null;
+
 
     // -------------------------------------------------------
     // START
@@ -152,6 +171,7 @@ public class UIBuilder : MonoBehaviour
         liveGameScreen   = BuildLiveGameScreen(canvas.gameObject);
         continueScreen   = BuildContinueScreen(canvas.gameObject);
         boxScoreScreen   = BuildBoxScoreScreen(canvas.gameObject);
+        preGameScreen    = BuildPreGameScreen(canvas.gameObject);
         ShowScreen(mainMenuScreen);
     }
 
@@ -1370,7 +1390,7 @@ public class UIBuilder : MonoBehaviour
         return 0;
     }
 
-    void OnPlayLiveGame()
+      void OnPlayLiveGame()
     {
         Team myTeam = GetMyTeam();
         if (myTeam == null) return;
@@ -1381,7 +1401,9 @@ public class UIBuilder : MonoBehaviour
 
         Team opponent =
             opponents[Random.Range(0, opponents.Count)];
-        StartLiveGame(myTeam, opponent);
+
+        // Show pre-game screen first
+        ShowPreGame(myTeam, opponent);
     }
 
     // -------------------------------------------------------
@@ -3441,6 +3463,8 @@ public class UIBuilder : MonoBehaviour
         gameInProgress   = true;
         gameOver         = false;
         usedRelievers.Clear();
+        lastHomePitcher = null;
+        lastAwayPitcher = null;
 
         homeInningRuns = new int[12];
         awayInningRuns = new int[12];
@@ -3540,8 +3564,14 @@ public class UIBuilder : MonoBehaviour
                     : homeBatterIndex % batters.Count;
                 Player bat = batters[idx];
                 SetGameText("BatterName", bat.FullName());
+                // Show season AVG if has ABs, else rating
+                string batStat = bat.seasonAtBats > 0
+                    ? bat.SeasonBattingAverage()
+                       .ToString("F3")
+                    : "." + bat.contact.ToString()
+                       .PadLeft(3, '0');
                 SetGameText("BatterInfo",
-                    bat.position + " | OVR: " + bat.overall);
+                    bat.position + " | " + batStat);
             }
         }
 
@@ -3557,9 +3587,15 @@ public class UIBuilder : MonoBehaviour
                     : awayPitcherIndex % allP.Count;
                 Player pit = allP[idx];
                 SetGameText("PitcherName", pit.FullName());
+                // Show season ERA if has pitched, else rating
+                string wl = pit.seasonWins + "-" +
+                            pit.seasonLosses;
+                string pitStat = pit.seasonInningsPitched > 0
+                    ? wl + " " +
+                      pit.SeasonERA().ToString("F2") + " ERA"
+                    : pit.pitching + " OVR";
                 SetGameText("PitcherInfo",
-                    pit.throwingArm + "HP | OVR: " +
-                    pit.pitching);
+                    pit.throwingArm + "HP | " + pitStat);
             }
         }
 
@@ -3750,6 +3786,26 @@ public class UIBuilder : MonoBehaviour
             pitcher.walksAllowed++;
             pitcher.seasonWalksAllowed++;
         }
+
+        // Track who is currently pitching
+        // so we know the pitcher of record
+        Team pitchingTeam = isTopInning ? homeTeam : awayTeam;
+        List<Player> currentPitchers =
+            pitchingTeam.roster.FindAll(
+                p => p.position == "SP" ||
+                     p.position == "RP");
+        if (currentPitchers.Count > 0)
+        {
+            int idx = isTopInning
+                ? homePitcherIndex % currentPitchers.Count
+                : awayPitcherIndex % currentPitchers.Count;
+
+            if (isTopInning)
+                lastHomePitcher = currentPitchers[idx];
+            else
+                lastAwayPitcher = currentPitchers[idx];
+        }
+
 
         RefreshGameDisplay();
     }
@@ -4142,6 +4198,139 @@ public class UIBuilder : MonoBehaviour
         }
     }
 
+
+    // Credit W or L to the pitcher of record
+    void CreditPitcherDecision()
+    {
+        if (homeScore == awayScore) return;
+
+        bool homeWon = homeScore > awayScore;
+        Team winTeam  = homeWon ? homeTeam : awayTeam;
+        Team loseTeam = homeWon ? awayTeam : homeTeam;
+
+        // -----------------------------------------------
+        // WINNING PITCHER
+        // Starter gets W if pitched 5+ innings.
+        // Otherwise first reliever who pitched 1+
+        // inning for the winning team gets the W.
+        // -----------------------------------------------
+        Player winPitcher = null;
+
+        Player winStarter = winTeam.roster.Find(
+            p => p.position == "SP" &&
+                 p.inningsPitched >= 5);
+
+        if (winStarter != null)
+        {
+            // Starter went 5+ — he gets the W
+            winPitcher = winStarter;
+        }
+        else
+        {
+            // Find first reliever from winning team
+            // who pitched at least 1 inning
+            foreach (Player rp in usedRelievers)
+            {
+                if (winTeam.roster.Contains(rp) &&
+                    rp.inningsPitched >= 1)
+                {
+                    winPitcher = rp;
+                    break;
+                }
+            }
+
+            // Fall back to starter if no reliever qualifies
+            if (winPitcher == null)
+                winPitcher = winTeam.roster.Find(
+                    p => p.position == "SP" &&
+                         p.inningsPitched > 0);
+        }
+
+        // -----------------------------------------------
+        // LOSING PITCHER
+        // ONLY give L to pitcher who actually gave up
+        // earned runs. No ER = No Decision always.
+        // -----------------------------------------------
+        Player losePitcher = null;
+
+        // Check ALL pitchers from losing team
+        // Only eligible if they gave up earned runs
+        List<Player> allLosePitchers = new List<Player>();
+
+        // Add starter if pitched
+        Player loseStarter = loseTeam.roster.Find(
+            p => p.position == "SP" &&
+                 p.inningsPitched > 0);
+        if (loseStarter != null)
+            allLosePitchers.Add(loseStarter);
+
+        // Add relievers from losing team
+        foreach (Player rp in usedRelievers)
+            if (loseTeam.roster.Contains(rp) &&
+                rp.inningsPitched > 0)
+                allLosePitchers.Add(rp);
+
+        // Find pitcher with most earned runs
+        // — he is responsible for the loss
+        int maxER = 0;
+        foreach (Player p in allLosePitchers)
+        {
+            if (p.earnedRuns > maxER)
+            {
+                maxER       = p.earnedRuns;
+                losePitcher = p;
+            }
+        }
+
+        // If nobody gave up any earned runs
+        // = No Decision for everyone on losing team
+        if (maxER == 0)
+        {
+            losePitcher = null;
+            Debug.Log("NO DECISION — losing team" +
+                      " gave up 0 earned runs." +
+                      " Unearned run loss.");
+        }
+
+        // Credit win
+        if (winPitcher != null)
+        {
+            winPitcher.wins++;
+            winPitcher.seasonWins++;
+            AddPlay("W: " + winPitcher.FullName() +
+                    " (" + winPitcher.seasonWins +
+                    "-" + winPitcher.seasonLosses + ")");
+            Debug.Log("WIN: " + winPitcher.FullName() +
+                      " IP:" + winPitcher.inningsPitched +
+                      " ER:" + winPitcher.earnedRuns +
+                      " ERA:" +
+                      winPitcher.SeasonERA().ToString("F2"));
+        }
+
+        // Credit loss — no decision if nobody qualifies
+        if (losePitcher != null)
+        {
+            losePitcher.losses++;
+            losePitcher.seasonLosses++;
+            AddPlay("L: " + losePitcher.FullName() +
+                    " (" + losePitcher.seasonWins +
+                    "-" + losePitcher.seasonLosses + ")");
+            Debug.Log("LOSS: " +
+                      losePitcher.FullName() +
+                      " IP:" + losePitcher.inningsPitched +
+                      " ER:" + losePitcher.earnedRuns +
+                      " ERA:" +
+                      losePitcher.SeasonERA()
+                          .ToString("F2"));
+        }
+        else
+        {
+            Debug.Log("No decision — no pitcher" +
+                      " clearly responsible for loss");
+        }
+    }
+
+
     void EndGame()
     {
         gameOver       = true;
@@ -4151,6 +4340,9 @@ public class UIBuilder : MonoBehaviour
                 awayTeam.abbreviation + " " + awayScore +
                 " — " +
                 homeTeam.abbreviation + " " + homeScore);
+
+        // Credit W/L to pitchers
+        CreditPitcherDecision();
 
         // Record result and auto-save
         GameManager gm =
@@ -4817,7 +5009,16 @@ public class UIBuilder : MonoBehaviour
             if (i < batters.Count)
             {
                 Player p = batters[i];
-                SetBSRowText(row, "Name", p.FullName());
+                // Show W/L next to pitcher name
+                string pitRecord = "";
+                if (p.wins > 0 || p.losses > 0)
+                    pitRecord = p.wins > p.losses
+                        ? " (W " + p.seasonWins + "-" +
+                          p.seasonLosses + ")"
+                        : " (L " + p.seasonWins + "-" +
+                          p.seasonLosses + ")";
+                SetBSRowText(row, "Name",
+                    p.FullName() + pitRecord);
                 SetBSRowText(row, "AB",
                     p.atBats.ToString());
                 SetBSRowText(row, "H",
@@ -4960,6 +5161,378 @@ public class UIBuilder : MonoBehaviour
         if (tmp != null) tmp.text = value;
     }
 
+
+    // -------------------------------------------------------
+    // PRE-GAME SCREEN
+    // -------------------------------------------------------
+    GameObject BuildPreGameScreen(GameObject canvas)
+    {
+        GameObject screen =
+            CreateScreen(canvas, "PreGame");
+
+        BuildImageBackground(screen, "background");
+        AddImage(screen, "Overlay",
+            new Color(0.03f, 0.05f, 0.10f, 0.92f),
+            Vector2.zero, new Vector2(390, 844));
+
+        // Header
+        AddImage(screen, "Header", SURFACE,
+            new Vector2(0, 380), new Vector2(390, 88));
+
+        AddText(screen, "PGMatchup",
+            "NYA vs TOR", 20, TEXT,
+            new Vector2(0, 390),
+            new Vector2(340, 36), FontStyles.Bold);
+
+        AddText(screen, "PGGameNum",
+            "GAME 1", 13, GOLD,
+            new Vector2(0, 358),
+            new Vector2(300, 24));
+
+        // Team tabs
+        AddImage(screen, "PGTabBG", SURFACE,
+            new Vector2(0, 318), new Vector2(390, 36));
+
+        GameObject homeTab = CreateButton(screen,
+            "HOME LINEUP", SURFACE, GOLD,
+            new Vector2(-97, 318),
+            new Vector2(178, 36), 11);
+        homeTab.name = "PGHomeTab";
+        GetButton(homeTab).onClick.AddListener(() =>
+        {
+            pgShowingHome = true;
+            RefreshPreGameLineup();
+            SetPGTabColors();
+        });
+
+        GameObject awayTab = CreateButton(screen,
+            "AWAY LINEUP", SURFACE, SUBTEXT,
+            new Vector2(97, 318),
+            new Vector2(178, 36), 11);
+        awayTab.name = "PGAwayTab";
+        GetButton(awayTab).onClick.AddListener(() =>
+        {
+            pgShowingHome = false;
+            RefreshPreGameLineup();
+            SetPGTabColors();
+        });
+
+        AddImage(screen, "PGTabLine", RED,
+            new Vector2(-97, 300), new Vector2(178, 3));
+
+        // Starter display
+        AddImage(screen, "PGStarterBG",
+            new Color(0.06f, 0.12f, 0.20f, 1f),
+            new Vector2(0, 270), new Vector2(374, 48));
+
+        AddText(screen, "PGStarterLabel",
+            "STARTING PITCHER", 9, SUBTEXT,
+            new Vector2(-80, 283),
+            new Vector2(160, 18));
+
+        AddText(screen, "PGStarterName",
+            "", 14, TEXT,
+            new Vector2(-80, 264),
+            new Vector2(220, 24), FontStyles.Bold);
+
+        AddText(screen, "PGStarterStats",
+            "", 11, GOLD,
+            new Vector2(130, 270),
+            new Vector2(120, 48));
+
+        // Column headers
+        AddImage(screen, "PGColHeader",
+            new Color(0.08f, 0.18f, 0.30f, 1f),
+            new Vector2(0, 243), new Vector2(374, 24));
+
+        AddText(screen, "PGColPos", "#  POS", 9, GOLD,
+            new Vector2(-130, 243), new Vector2(80, 24));
+        AddText(screen, "PGColName", "PLAYER", 9, GOLD,
+            new Vector2(-30, 243), new Vector2(120, 24));
+        AddText(screen, "PGColOVR", "OVR", 9, GOLD,
+            new Vector2(110, 243), new Vector2(40, 24));
+        AddText(screen, "PGColAVG", "AVG", 9, GOLD,
+            new Vector2(155, 243), new Vector2(40, 24));
+
+        // 9 lineup rows
+        for (int i = 0; i < 9; i++)
+        {
+            float rowY = 221f - (i * 22f);
+            Color rowColor = i % 2 == 0
+                ? new Color(0.05f, 0.10f, 0.18f, 0.97f)
+                : new Color(0.04f, 0.08f, 0.15f, 0.97f);
+
+            GameObject row =
+                new GameObject("PGRow_" + i);
+            row.transform.SetParent(
+                screen.transform, false);
+            RectTransform rRT =
+                row.AddComponent<RectTransform>();
+            rRT.anchoredPosition = new Vector2(0, rowY);
+            rRT.sizeDelta        = new Vector2(374, 20);
+            row.AddComponent<Image>().color = rowColor;
+
+            // Batting order number
+            AddTextToParent(row, "Num",
+                (i + 1) + ".",
+                9f, SUBTEXT, new Vector2(-168f, 0f),
+                new Vector2(24f, 20f),
+                TextAlignmentOptions.Midline);
+
+            // Position
+            AddTextToParent(row, "Pos", "",
+                9f, RED, new Vector2(-145f, 0f),
+                new Vector2(36f, 20f),
+                TextAlignmentOptions.Midline);
+
+            // Player name
+            AddTextToParent(row, "Name", "",
+                9f, TEXT, new Vector2(-30f, 0f),
+                new Vector2(160f, 20f),
+                TextAlignmentOptions.MidlineLeft);
+
+            // Overall
+            AddTextToParent(row, "OVR", "",
+                9f, SUBTEXT, new Vector2(110f, 0f),
+                new Vector2(40f, 20f),
+                TextAlignmentOptions.Midline);
+
+            // Season AVG
+            AddTextToParent(row, "AVG", "",
+                9f, GOLD, new Vector2(155f, 0f),
+                new Vector2(40f, 20f),
+                TextAlignmentOptions.Midline);
+        }
+
+        // Weather / conditions bar
+        AddImage(screen, "PGCondBG", SURFACE,
+            new Vector2(0, 15), new Vector2(374, 30));
+
+        AddText(screen, "PGConditions",
+            "⚾  CLEAR  •  72°F  •  Wind: 5mph OUT",
+            10, SUBTEXT,
+            new Vector2(0, 15),
+            new Vector2(360, 30));
+
+        // Start game button
+        GameObject startBtn = CreateButton(screen,
+            "PLAY BALL!", RED, TEXT,
+            new Vector2(0, -50),
+            new Vector2(300, 62), 22);
+        GetButton(startBtn).onClick.AddListener(() =>
+            OnStartPreGame());
+        startBtn.name = "PGStartBtn";
+
+        // Back button
+        GameObject backBtn = CreateButton(screen,
+            "BACK", SURFACE, SUBTEXT,
+            new Vector2(0, -130),
+            new Vector2(160, 40), 13);
+        AddBorder(backBtn, BORDER, 2);
+        GetButton(backBtn).onClick.AddListener(() =>
+            ShowScreen(teamScreen));
+
+        screen.SetActive(false);
+        return screen;
+    }
+
+    // Show pre-game screen before a live game
+    public void ShowPreGame(Team home, Team away)
+    {
+        pgHomeTeam      = home;
+        pgAwayTeam      = away;
+        pgShowingHome   = true;
+        pgGameNumber++;
+
+        // Build optimal lineups
+        pgHomeLineup = BuildOptimalLineup(home);
+        pgAwayLineup = BuildOptimalLineup(away);
+
+        // Set matchup header
+        SetPGText("PGMatchup",
+            away.abbreviation + "  vs  " +
+            home.abbreviation);
+        SetPGText("PGGameNum",
+            "GAME " + pgGameNumber);
+
+        // Random weather
+        string[] conditions =
+        {
+            "CLEAR  •  72F  •  Wind: 5mph OUT",
+            "CLOUDY  •  65F  •  Wind: 8mph IN",
+            "SUNNY  •  81F  •  Calm winds",
+            "OVERCAST  •  59F  •  Wind: 12mph OUT",
+            "PARTLY CLOUDY  •  74F  •  Wind: 3mph"
+        };
+        SetPGText("PGConditions",
+            conditions[Random.Range(
+                0, conditions.Length)]);
+
+        RefreshPreGameLineup();
+        SetPGTabColors();
+        ShowScreen(preGameScreen);
+    }
+
+    // Build a simple optimal batting lineup
+    List<Player> BuildOptimalLineup(Team team)
+    {
+        if (team?.roster == null)
+            return new List<Player>();
+
+        List<Player> batters = team.roster.FindAll(
+            p => p.position != "SP" &&
+                 p.position != "RP");
+
+        // Sort by overall rating
+        batters.Sort((a, b) =>
+            b.overall.CompareTo(a.overall));
+
+        // Take top 9
+        List<Player> lineup = new List<Player>();
+        for (int i = 0; i < 9 && i < batters.Count; i++)
+            lineup.Add(batters[i]);
+
+        return lineup;
+    }
+
+    // Refresh the lineup rows
+    void RefreshPreGameLineup()
+    {
+        if (preGameScreen == null) return;
+
+        Team showTeam   = pgShowingHome ?
+            pgHomeTeam : pgAwayTeam;
+        List<Player> lu = pgShowingHome ?
+            pgHomeLineup : pgAwayLineup;
+
+        // Show starting pitcher
+        if (showTeam?.roster != null)
+        {
+            GameManager gm =
+                FindFirstObjectByType<GameManager>();
+            List<Player> sps = showTeam.roster.FindAll(
+                p => p.position == "SP");
+
+            if (sps.Count > 0 && gm != null)
+            {
+                int rotIdx =
+                    gm.GetStartingPitcherIndex(
+                        showTeam.abbreviation) %
+                    sps.Count;
+                Player starter = sps[rotIdx];
+
+                SetPGText("PGStarterName",
+                    starter.FullName());
+
+                string wl = starter.seasonWins + "-" +
+                            starter.seasonLosses;
+                string era = starter.seasonInningsPitched > 0
+                    ? starter.SeasonERA().ToString("F2")
+                    : "-.--";
+                SetPGText("PGStarterStats",
+                    wl + "  " + era + " ERA\n" +
+                    starter.throwingArm + "HP  " +
+                    starter.pitching + " OVR");
+            }
+        }
+
+        // Fill lineup rows
+        for (int i = 0; i < 9; i++)
+        {
+            Transform row = preGameScreen.transform
+                .Find("PGRow_" + i);
+            if (row == null) continue;
+
+            if (i < lu.Count)
+            {
+                Player p = lu[i];
+                SetPGRowText(row, "Pos", p.position);
+                SetPGRowText(row, "Name", p.FullName());
+                SetPGRowText(row, "OVR",
+                    p.overall.ToString());
+                SetPGRowText(row, "AVG",
+                    p.seasonAtBats > 0
+                        ? p.SeasonBattingAverage()
+                           .ToString("F3")
+                        : "---");
+            }
+            else
+            {
+                SetPGRowText(row, "Pos",  "");
+                SetPGRowText(row, "Name", "");
+                SetPGRowText(row, "OVR",  "");
+                SetPGRowText(row, "AVG",  "");
+            }
+        }
+    }
+
+    // Set pre-game tab colors
+    void SetPGTabColors()
+    {
+        Transform homeTab =
+            preGameScreen.transform.Find("PGHomeTab");
+        Transform awayTab =
+            preGameScreen.transform.Find("PGAwayTab");
+        Transform tabLine =
+            preGameScreen.transform.Find("PGTabLine");
+
+        if (homeTab != null)
+        {
+            TextMeshProUGUI t =
+                homeTab.GetComponentInChildren
+                    <TextMeshProUGUI>();
+            if (t != null)
+                t.color = pgShowingHome ? GOLD : SUBTEXT;
+        }
+        if (awayTab != null)
+        {
+            TextMeshProUGUI t =
+                awayTab.GetComponentInChildren
+                    <TextMeshProUGUI>();
+            if (t != null)
+                t.color = pgShowingHome ? SUBTEXT : GOLD;
+        }
+        if (tabLine != null)
+        {
+            RectTransform rt =
+                tabLine.GetComponent<RectTransform>();
+            if (rt != null)
+                rt.anchoredPosition = new Vector2(
+                    pgShowingHome ? -97f : 97f, 300);
+        }
+    }
+
+    // Start the actual live game from pre-game screen
+    void OnStartPreGame()
+    {
+        if (pgHomeTeam == null || pgAwayTeam == null)
+            return;
+        StartLiveGame(pgHomeTeam, pgAwayTeam);
+    }
+
+    void SetPGText(string objName, string value)
+    {
+        if (preGameScreen == null) return;
+        Transform t =
+            preGameScreen.transform.Find(objName);
+        if (t == null) return;
+        TextMeshProUGUI tmp =
+            t.GetComponent<TextMeshProUGUI>();
+        if (tmp != null) tmp.text = value;
+    }
+
+    void SetPGRowText(Transform row, string name,
+                       string value)
+    {
+        Transform t = row.Find(name);
+        if (t == null) return;
+        TextMeshProUGUI tmp =
+            t.GetComponent<TextMeshProUGUI>();
+        if (tmp != null) tmp.text = value;
+    }
+
+
+
     // -------------------------------------------------------
     // BOTTOM NAV
     // -------------------------------------------------------
@@ -5063,6 +5636,8 @@ public class UIBuilder : MonoBehaviour
             liveGameScreen.SetActive(false);
         if (boxScoreScreen   != null)
             boxScoreScreen.SetActive(false);
+        if (preGameScreen    != null)
+            preGameScreen.SetActive(false);
         if (screen           != null)
             screen.SetActive(true);
         currentScreen = screen;

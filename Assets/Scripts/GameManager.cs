@@ -370,11 +370,15 @@ public class GameManager : MonoBehaviour
             {
                 home.wins++;
                 away.losses++;
+                // Credit CPU pitcher stats
+                CreditCPUPitcherStats(home, away, true);
             }
             else
             {
                 away.wins++;
                 home.losses++;
+                // Credit CPU pitcher stats
+                CreditCPUPitcherStats(away, home, false);
             }
 
             gamesPlayed++;
@@ -412,6 +416,143 @@ public class GameManager : MonoBehaviour
             teamRotationIndex[teamAbbr] = 0;
         return teamRotationIndex[teamAbbr];
     }
+
+    // Simulate basic pitcher stats for CPU games
+    void CreditCPUPitcherStats(
+        Team winTeam, Team loseTeam, bool homeWon)
+    {
+        // Find starters
+        Player winSP = null;
+        Player loseSP = null;
+
+        if (winTeam.roster != null)
+        {
+            List<Player> sps = winTeam.roster.FindAll(
+                p => p.position == "SP");
+            if (sps.Count > 0)
+            {
+                int idx = GetStartingPitcherIndex(
+                    winTeam.abbreviation) % sps.Count;
+                winSP = sps[idx];
+            }
+        }
+
+        if (loseTeam.roster != null)
+        {
+            List<Player> sps = loseTeam.roster.FindAll(
+                p => p.position == "SP");
+            if (sps.Count > 0)
+            {
+                int idx = GetStartingPitcherIndex(
+                    loseTeam.abbreviation) % sps.Count;
+                loseSP = sps[idx];
+            }
+        }
+
+        // Simulate realistic game stats
+        if (winSP != null)
+        {
+            // Winner starter: 5-7 IP, 0-2 ER
+            int ip = Random.Range(5, 8);
+            int er = Random.Range(0, 3);
+            winSP.seasonInningsPitched += ip;
+            winSP.seasonEarnedRuns     += er;
+            winSP.seasonWins++;
+            winSP.wins++;
+
+            // K's based on pitching rating
+            int k = Mathf.RoundToInt(
+                ip * (winSP.pitching / 99f) * 1.5f) +
+                Random.Range(0, 3);
+            winSP.seasonStrikeoutsThrown += k;
+
+            // Hits allowed
+            int h = Random.Range(3, ip + 2);
+            winSP.seasonHitsAllowed += h;
+        }
+
+        if (loseSP != null)
+        {
+            // Loser starter: 4-6 IP, 2-5 ER
+            int ip = Random.Range(4, 7);
+            int er = Random.Range(2, 6);
+            loseSP.seasonInningsPitched += ip;
+            loseSP.seasonEarnedRuns     += er;
+            loseSP.seasonLosses++;
+            loseSP.losses++;
+
+            int k = Mathf.RoundToInt(
+                ip * (loseSP.pitching / 99f) * 1.2f) +
+                Random.Range(0, 2);
+            loseSP.seasonStrikeoutsThrown += k;
+
+            int h = Random.Range(ip, ip + 4);
+            loseSP.seasonHitsAllowed += h;
+        }
+
+        // Simulate batter stats too
+        SimulateCPUBatterStats(winTeam,  true);
+        SimulateCPUBatterStats(loseTeam, false);
+    }
+
+    // Simulate basic batter stats for CPU games
+    void SimulateCPUBatterStats(Team team, bool won)
+    {
+        if (team?.roster == null) return;
+
+        List<Player> batters = team.roster.FindAll(
+            p => p.position != "SP" &&
+                 p.position != "RP");
+
+        int teamHits = won
+            ? Random.Range(6, 13)
+            : Random.Range(3, 9);
+
+        int teamRuns = won
+            ? Random.Range(2, 8)
+            : Random.Range(0, 4);
+
+        // Distribute hits across lineup
+        foreach (Player b in batters)
+        {
+            b.seasonAtBats += Random.Range(3, 5);
+
+            // More hits for better hitters
+            float hitChance =
+                (b.contact / 99f) * 0.35f + 0.15f;
+            if (Random.value < hitChance)
+            {
+                b.seasonHits++;
+                b.seasonSingles++;
+
+                // HR chance
+                if (Random.value <
+                    b.power / 99f * 0.08f)
+                {
+                    b.seasonHomeRuns++;
+                    b.seasonHits++;
+                    b.seasonAtBats++;
+                }
+            }
+        }
+
+        // Distribute RBI to top hitters
+        if (batters.Count > 0)
+        {
+            batters.Sort((a, b2) =>
+                b2.power.CompareTo(a.power));
+            int rbiLeft = teamRuns;
+            for (int i = 0;
+                 i < batters.Count && rbiLeft > 0; i++)
+            {
+                int rbi = Random.Range(0, 2);
+                batters[i].seasonRbi += rbi;
+                rbiLeft -= rbi;
+            }
+        }
+    }
+
+
 
     // -------------------------------------------------------
     // TRADE SYSTEM
