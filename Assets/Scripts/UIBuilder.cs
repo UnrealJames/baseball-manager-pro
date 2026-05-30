@@ -31,6 +31,7 @@ public class UIBuilder : MonoBehaviour
     GameObject draftScreen;
     GameObject faScreen;
     GameObject liveGameScreen;
+    GameObject boxScoreScreen;
     GameObject currentScreen;
 
     // Data
@@ -125,6 +126,9 @@ public class UIBuilder : MonoBehaviour
     float         sbColStart      = -118f;
     float         sbColW          = 26f;
 
+    // Box score
+    bool boxScoreShowingHome = true;
+
     // -------------------------------------------------------
     // START
     // -------------------------------------------------------
@@ -147,6 +151,7 @@ public class UIBuilder : MonoBehaviour
         faScreen         = BuildFAScreen(canvas.gameObject);
         liveGameScreen   = BuildLiveGameScreen(canvas.gameObject);
         continueScreen   = BuildContinueScreen(canvas.gameObject);
+        boxScoreScreen   = BuildBoxScoreScreen(canvas.gameObject);
         ShowScreen(mainMenuScreen);
     }
 
@@ -155,14 +160,13 @@ public class UIBuilder : MonoBehaviour
     // -------------------------------------------------------
     Canvas CreateCanvas()
     {
-        GameObject obj    = new GameObject("GameCanvas");
-        Canvas canvas     = obj.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        GameObject obj     = new GameObject("GameCanvas");
+        Canvas canvas      = obj.AddComponent<Canvas>();
+        canvas.renderMode  = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 10;
 
         CanvasScaler cs        = obj.AddComponent<CanvasScaler>();
-        cs.uiScaleMode         =
-            CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        cs.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         cs.referenceResolution = new Vector2(390, 844);
         cs.matchWidthOrHeight  = 0.5f;
 
@@ -208,7 +212,6 @@ public class UIBuilder : MonoBehaviour
             16, GOLD, new Vector2(0, 125),
             new Vector2(350, 30));
 
-        // New Season button
         GameObject newBtn = CreateButton(screen,
             "NEW SEASON", RED, TEXT,
             new Vector2(0, 20),
@@ -216,7 +219,6 @@ public class UIBuilder : MonoBehaviour
         GetButton(newBtn).onClick.AddListener(() =>
             ShowScreen(gmNameScreen));
 
-        // Continue button — goes to save slot screen
         GameObject contBtn = CreateButton(screen,
             "CONTINUE", SURFACE, SUBTEXT,
             new Vector2(0, -60),
@@ -235,7 +237,6 @@ public class UIBuilder : MonoBehaviour
                 Debug.Log("No save files found!");
         });
 
-        // Settings button
         GameObject settBtn = CreateButton(screen,
             "SETTINGS", SURFACE, SUBTEXT,
             new Vector2(0, -135),
@@ -252,7 +253,7 @@ public class UIBuilder : MonoBehaviour
     }
 
     // -------------------------------------------------------
-    // CONTINUE SCREEN — save slot selection
+    // CONTINUE SCREEN
     // -------------------------------------------------------
     GameObject BuildContinueScreen(GameObject canvas)
     {
@@ -264,7 +265,6 @@ public class UIBuilder : MonoBehaviour
             new Color(0.03f, 0.05f, 0.10f, 0.88f),
             Vector2.zero, new Vector2(390, 844));
 
-        // Header
         AddImage(screen, "Header",
             new Color(0.06f, 0.12f, 0.20f, 1f),
             new Vector2(0, 370), new Vector2(390, 100));
@@ -282,7 +282,6 @@ public class UIBuilder : MonoBehaviour
             13, GOLD, new Vector2(0, 350),
             new Vector2(300, 24));
 
-        // Back button
         GameObject backBtn = CreateButton(screen,
             "BACK", SURFACE, GOLD,
             new Vector2(-140, 378),
@@ -290,7 +289,6 @@ public class UIBuilder : MonoBehaviour
         GetButton(backBtn).onClick.AddListener(() =>
             ShowScreen(mainMenuScreen));
 
-        // Save slot card
         AddImage(screen, "SlotCard",
             new Color(0.06f, 0.12f, 0.20f, 0.97f),
             new Vector2(0, 80), new Vector2(340, 300));
@@ -298,50 +296,41 @@ public class UIBuilder : MonoBehaviour
         AddImage(screen, "SlotCardTop", RED,
             new Vector2(0, 228), new Vector2(340, 5));
 
-        // Slot number badge
         AddImage(screen, "SlotBadge", RED,
-            new Vector2(-130, 210),
-            new Vector2(80, 30));
+            new Vector2(-130, 210), new Vector2(80, 30));
         AddText(screen, "SlotNumber",
             "SLOT 1", 12, TEXT,
             new Vector2(-130, 210),
             new Vector2(80, 30), FontStyles.Bold);
 
-        // Team abbreviation large
         AddText(screen, "SlotTeam",
             "", 64, RED,
             new Vector2(0, 145),
             new Vector2(340, 90), FontStyles.Bold);
 
-        // GM name
         AddText(screen, "SlotGM",
             "", 16, SUBTEXT,
             new Vector2(0, 78),
             new Vector2(300, 28));
 
-        // Season info
         AddText(screen, "SlotSeason",
             "", 22, TEXT,
             new Vector2(0, 45),
             new Vector2(300, 36), FontStyles.Bold);
 
-        // Divider
         AddImage(screen, "SlotDiv", BORDER,
             new Vector2(0, 18), new Vector2(300, 1));
 
-        // Empty slot status
         AddText(screen, "SlotStatus",
             "EMPTY SLOT", 16, SUBTEXT,
             new Vector2(0, -5),
             new Vector2(300, 30));
 
-        // Slot counter
         AddText(screen, "SlotCounter",
             "1 / 3", 13, SUBTEXT,
             new Vector2(0, -115),
             new Vector2(200, 28));
 
-        // Prev slot arrow
         GameObject prevBtn = CreateButton(screen,
             "<", SURFACE, TEXT,
             new Vector2(-150, 80),
@@ -354,7 +343,6 @@ public class UIBuilder : MonoBehaviour
             RefreshSlotCard();
         });
 
-        // Next slot arrow
         GameObject nextBtn = CreateButton(screen,
             ">", SURFACE, TEXT,
             new Vector2(150, 80),
@@ -367,7 +355,6 @@ public class UIBuilder : MonoBehaviour
             RefreshSlotCard();
         });
 
-        // Load button
         GameObject loadBtn = CreateButton(screen,
             "LOAD THIS SAVE", RED, TEXT,
             new Vector2(0, -185),
@@ -376,7 +363,6 @@ public class UIBuilder : MonoBehaviour
         GetButton(loadBtn).onClick.AddListener(() =>
             OnLoadSave());
 
-        // Delete button
         GameObject deleteBtn = CreateButton(screen,
             "DELETE", SURFACE, RED,
             new Vector2(0, -248),
@@ -390,17 +376,16 @@ public class UIBuilder : MonoBehaviour
         return screen;
     }
 
-    // Populate continue screen with save data
     void PopulateContinueScreen()
     {
         saveSlotIndex = 0;
-        GameManager gm = FindFirstObjectByType<GameManager>();
+        GameManager gm =
+            FindFirstObjectByType<GameManager>();
         if (gm != null)
             saveInfos = gm.GetAllSaveInfos();
         else
             saveInfos = new List<string> { "", "", "" };
 
-        // Find first occupied slot
         for (int i = 0; i < saveInfos.Count; i++)
         {
             if (saveInfos[i] != "")
@@ -413,7 +398,6 @@ public class UIBuilder : MonoBehaviour
         RefreshSlotCard();
     }
 
-    // Refresh the save slot card
     void RefreshSlotCard()
     {
         if (continueScreen == null) return;
@@ -429,8 +413,7 @@ public class UIBuilder : MonoBehaviour
 
         if (hasData)
         {
-            // Parse: "GM — TEAM — Season X"
-            string info   = saveInfos[saveSlotIndex];
+            string info    = saveInfos[saveSlotIndex];
             string[] parts = info.Split(
                 new string[] { " — " },
                 System.StringSplitOptions.None);
@@ -444,14 +427,12 @@ public class UIBuilder : MonoBehaviour
             SetContinueText("SlotSeason", season);
             SetContinueText("SlotStatus", "");
 
-            // Enable load
             Transform loadBtn =
                 continueScreen.transform.Find("LoadBtn");
             if (loadBtn != null)
                 loadBtn.GetComponent<Button>()
                     .interactable = true;
 
-            // Show delete
             Transform deleteBtn =
                 continueScreen.transform.Find("DeleteBtn");
             if (deleteBtn != null)
@@ -477,7 +458,6 @@ public class UIBuilder : MonoBehaviour
         }
     }
 
-    // Load selected save slot
     void OnLoadSave()
     {
         GameManager gm =
@@ -501,7 +481,6 @@ public class UIBuilder : MonoBehaviour
         }
     }
 
-    // Delete selected save slot
     void OnDeleteSave()
     {
         GameManager gm =
@@ -529,7 +508,7 @@ public class UIBuilder : MonoBehaviour
     }
 
     // -------------------------------------------------------
-    // EXIT DIALOG — save and quit options
+    // EXIT DIALOG
     // -------------------------------------------------------
     void ShowExitDialog()
     {
@@ -537,7 +516,6 @@ public class UIBuilder : MonoBehaviour
             teamScreen.transform.Find("ExitDialog");
         if (old != null) Destroy(old.gameObject);
 
-        // Dark overlay
         GameObject dialog = new GameObject("ExitDialog");
         dialog.transform.SetParent(
             teamScreen.transform, false);
@@ -559,7 +537,6 @@ public class UIBuilder : MonoBehaviour
             new Vector2(0, 40),
             new Vector2(300, 30));
 
-        // Save and quit
         GameObject saveQuitBtn = CreateButton(dialog,
             "SAVE AND QUIT", GREEN, BG,
             new Vector2(0, -20),
@@ -574,7 +551,6 @@ public class UIBuilder : MonoBehaviour
             ShowScreen(mainMenuScreen);
         });
 
-        // Quit without saving
         GameObject quitBtn = CreateButton(dialog,
             "QUIT WITHOUT SAVING", SURFACE, RED,
             new Vector2(0, -88),
@@ -586,7 +562,6 @@ public class UIBuilder : MonoBehaviour
             ShowScreen(mainMenuScreen);
         });
 
-        // Cancel
         GameObject cancelBtn = CreateButton(dialog,
             "CANCEL", SURFACE, SUBTEXT,
             new Vector2(0, -155),
@@ -844,7 +819,6 @@ public class UIBuilder : MonoBehaviour
                     gm.StartFranchise(
                         chosen.abbreviation, gmName);
 
-                    // Find first empty save slot
                     for (int s = 0; s < 3; s++)
                     {
                         if (!gm.HasSaveFile(s))
@@ -855,7 +829,6 @@ public class UIBuilder : MonoBehaviour
                         }
                     }
 
-                    // Auto save new franchise
                     gm.SaveGame(currentSaveSlot);
                 }
 
@@ -932,7 +905,7 @@ public class UIBuilder : MonoBehaviour
         AddImage(screen, "Header", SURFACE,
             new Vector2(0, 380), new Vector2(390, 88));
 
-        // EXIT button — replaces back button
+        // EXIT button
         GameObject exitBtn = CreateButton(screen,
             "EXIT", SURFACE, RED,
             new Vector2(-150, 380),
@@ -952,7 +925,6 @@ public class UIBuilder : MonoBehaviour
             new Vector2(20, 357),
             new Vector2(200, 24));
 
-        // Tab bar
         AddImage(screen, "TabBar", SURFACE,
             new Vector2(0, 313), new Vector2(390, 40));
 
@@ -973,7 +945,6 @@ public class UIBuilder : MonoBehaviour
         AddImage(screen, "TabLine", RED,
             new Vector2(-120, 294), new Vector2(110, 3));
 
-        // Player card
         AddImage(screen, "PlayerCard",
             new Color(0.06f, 0.12f, 0.20f, 0.97f),
             new Vector2(0, 90), new Vector2(340, 300));
@@ -1088,7 +1059,6 @@ public class UIBuilder : MonoBehaviour
             RefreshPlayerCard();
         });
 
-        // Simulate season button
         GameObject simBtn = CreateButton(screen,
             "SIMULATE SEASON", GREEN, BG,
             new Vector2(0, -270),
@@ -1097,7 +1067,6 @@ public class UIBuilder : MonoBehaviour
             OnSimulateSeason());
         simBtn.name = "SimBtn";
 
-        // Play live game button
         GameObject liveBtn = CreateButton(screen,
             "PLAY LIVE GAME", RED, TEXT,
             new Vector2(0, -320),
@@ -1206,33 +1175,86 @@ public class UIBuilder : MonoBehaviour
 
         if (isPitcher)
         {
-            SetTeamText("Attr1Label", "PITCHING");
-            SetTeamText("Attr1Val",   p.pitching.ToString());
-            SetTeamText("Attr2Label", "STAMINA");
-            SetTeamText("Attr2Val",   p.stamina.ToString());
-            SetTeamText("Attr3Label", "CONFIDENCE");
-            SetTeamText("Attr3Val",
-                p.confidence.ToString("F0"));
-            SetTeamText("Attr4Label", "CONTRACT");
-            SetTeamText("Attr4Val",
-                p.contractYears + " YRS");
-            SetTeamText("Attr5Label", "ROLE");
-            SetTeamText("Attr5Val",
-                p.bullpenRole != "" ?
-                p.bullpenRole : p.position);
+            // Show season stats if pitcher has thrown
+            if (p.seasonInningsPitched > 0)
+            {
+                SetTeamText("Attr1Label", "SZN ERA");
+                SetTeamText("Attr1Val",
+                    p.SeasonERA().ToString("F2"));
+                SetTeamText("Attr2Label", "SZN K");
+                SetTeamText("Attr2Val",
+                    p.seasonStrikeoutsThrown.ToString());
+                SetTeamText("Attr3Label", "SZN IP");
+                SetTeamText("Attr3Val",
+                    p.seasonInningsPitched.ToString());
+                SetTeamText("Attr4Label", "CONFIDENCE");
+                SetTeamText("Attr4Val",
+                    p.confidence.ToString("F0"));
+                SetTeamText("Attr5Label", "ROLE");
+                SetTeamText("Attr5Val",
+                    p.bullpenRole != "" ?
+                    p.bullpenRole : p.position);
+            }
+            else
+            {
+                SetTeamText("Attr1Label", "PITCHING");
+                SetTeamText("Attr1Val",
+                    p.pitching.ToString());
+                SetTeamText("Attr2Label", "STAMINA");
+                SetTeamText("Attr2Val",
+                    p.stamina.ToString());
+                SetTeamText("Attr3Label", "CONFIDENCE");
+                SetTeamText("Attr3Val",
+                    p.confidence.ToString("F0"));
+                SetTeamText("Attr4Label", "CONTRACT");
+                SetTeamText("Attr4Val",
+                    p.contractYears + " YRS");
+                SetTeamText("Attr5Label", "ROLE");
+                SetTeamText("Attr5Val",
+                    p.bullpenRole != "" ?
+                    p.bullpenRole : p.position);
+            }
         }
         else
         {
-            SetTeamText("Attr1Label", "CONTACT");
-            SetTeamText("Attr1Val",   p.contact.ToString());
-            SetTeamText("Attr2Label", "POWER");
-            SetTeamText("Attr2Val",   p.power.ToString());
-            SetTeamText("Attr3Label", "SPEED");
-            SetTeamText("Attr3Val",   p.speed.ToString());
-            SetTeamText("Attr4Label", "FIELDING");
-            SetTeamText("Attr4Val",   p.fielding.ToString());
-            SetTeamText("Attr5Label", "ARM");
-            SetTeamText("Attr5Val",   p.arm.ToString());
+            // Show season stats if batter has ABs
+            if (p.seasonAtBats > 0)
+            {
+                SetTeamText("Attr1Label", "SZN AVG");
+                SetTeamText("Attr1Val",
+                    p.SeasonBattingAverage()
+                     .ToString("F3"));
+                SetTeamText("Attr2Label", "SZN HR");
+                SetTeamText("Attr2Val",
+                    p.seasonHomeRuns.ToString());
+                SetTeamText("Attr3Label", "SZN RBI");
+                SetTeamText("Attr3Val",
+                    p.seasonRbi.ToString());
+                SetTeamText("Attr4Label", "SZN OPS");
+                SetTeamText("Attr4Val",
+                    p.SeasonOPS().ToString("F3"));
+                SetTeamText("Attr5Label", "SZN AB");
+                SetTeamText("Attr5Val",
+                    p.seasonAtBats.ToString());
+            }
+            else
+            {
+                SetTeamText("Attr1Label", "CONTACT");
+                SetTeamText("Attr1Val",
+                    p.contact.ToString());
+                SetTeamText("Attr2Label", "POWER");
+                SetTeamText("Attr2Val",
+                    p.power.ToString());
+                SetTeamText("Attr3Label", "SPEED");
+                SetTeamText("Attr3Val",
+                    p.speed.ToString());
+                SetTeamText("Attr4Label", "FIELDING");
+                SetTeamText("Attr4Val",
+                    p.fielding.ToString());
+                SetTeamText("Attr5Label", "ARM");
+                SetTeamText("Attr5Val",
+                    p.arm.ToString());
+            }
         }
 
         SetTeamText("InjuryBadge",
@@ -1270,8 +1292,7 @@ public class UIBuilder : MonoBehaviour
             Button btn = simBtn.GetComponent<Button>();
             if (btn != null) btn.interactable = false;
             TextMeshProUGUI btnText =
-                simBtn.GetComponentInChildren
-                    <TextMeshProUGUI>();
+                simBtn.GetComponentInChildren<TextMeshProUGUI>();
             if (btnText != null)
                 btnText.text = "SIMULATING...";
         }
@@ -1288,8 +1309,7 @@ public class UIBuilder : MonoBehaviour
             Button btn = simBtn.GetComponent<Button>();
             if (btn != null) btn.interactable = true;
             TextMeshProUGUI btnText =
-                simBtn.GetComponentInChildren
-                    <TextMeshProUGUI>();
+                simBtn.GetComponentInChildren<TextMeshProUGUI>();
             if (btnText != null)
                 btnText.text = "NEXT SEASON";
         }
@@ -1524,10 +1544,8 @@ public class UIBuilder : MonoBehaviour
             {
                 if (gm.finalWins.ContainsKey(t.abbreviation))
                     t.wins = gm.finalWins[t.abbreviation];
-                if (gm.finalLosses.ContainsKey(
-                    t.abbreviation))
-                    t.losses =
-                        gm.finalLosses[t.abbreviation];
+                if (gm.finalLosses.ContainsKey(t.abbreviation))
+                    t.losses = gm.finalLosses[t.abbreviation];
             }
         }
 
@@ -1581,13 +1599,10 @@ public class UIBuilder : MonoBehaviour
                 }
             }
 
-            SetStandText(row, "RowW",
-                t.wins.ToString());
-            SetStandText(row, "RowL",
-                t.losses.ToString());
-            SetStandText(row, "RowPCT",
-                pct.ToString("F3"));
-            SetStandText(row, "RowGB", gbStr);
+            SetStandText(row, "RowW",   t.wins.ToString());
+            SetStandText(row, "RowL",   t.losses.ToString());
+            SetStandText(row, "RowPCT", pct.ToString("F3"));
+            SetStandText(row, "RowGB",  gbStr);
         }
     }
 
@@ -1640,8 +1655,7 @@ public class UIBuilder : MonoBehaviour
             if (btn != null)
             {
                 TextMeshProUGUI txt =
-                    btn.GetComponentInChildren
-                        <TextMeshProUGUI>();
+                    btn.GetComponentInChildren<TextMeshProUGUI>();
                 if (txt != null)
                     txt.text = isThreeTeam ?
                         "3-TEAM: ON" : "3-TEAM: OFF";
@@ -1718,18 +1732,15 @@ public class UIBuilder : MonoBehaviour
         if (!isMyTeam)
         {
             GameObject prevT = new GameObject("PrevTeam");
-            prevT.transform.SetParent(
-                panel.transform, false);
+            prevT.transform.SetParent(panel.transform, false);
             RectTransform ptRT =
                 prevT.AddComponent<RectTransform>();
-            ptRT.anchoredPosition =
-                new Vector2(-160, 42);
-            ptRT.sizeDelta = new Vector2(24, 24);
+            ptRT.anchoredPosition = new Vector2(-160, 42);
+            ptRT.sizeDelta         = new Vector2(24, 24);
             prevT.AddComponent<Image>().color = SURFACE;
             Button ptBtn = prevT.AddComponent<Button>();
             GameObject ptTxt = new GameObject("T");
-            ptTxt.transform.SetParent(
-                prevT.transform, false);
+            ptTxt.transform.SetParent(prevT.transform, false);
             TextMeshProUGUI ptT =
                 ptTxt.AddComponent<TextMeshProUGUI>();
             ptT.text = "<"; ptT.fontSize = 14f;
@@ -1759,18 +1770,15 @@ public class UIBuilder : MonoBehaviour
             tnRT.sizeDelta         = new Vector2(220, 24);
 
             GameObject nextT = new GameObject("NextTeam");
-            nextT.transform.SetParent(
-                panel.transform, false);
+            nextT.transform.SetParent(panel.transform, false);
             RectTransform ntRT =
                 nextT.AddComponent<RectTransform>();
-            ntRT.anchoredPosition =
-                new Vector2(160, 42);
-            ntRT.sizeDelta = new Vector2(24, 24);
+            ntRT.anchoredPosition = new Vector2(160, 42);
+            ntRT.sizeDelta         = new Vector2(24, 24);
             nextT.AddComponent<Image>().color = SURFACE;
             Button ntBtn = nextT.AddComponent<Button>();
             GameObject ntTxt = new GameObject("T");
-            ntTxt.transform.SetParent(
-                nextT.transform, false);
+            ntTxt.transform.SetParent(nextT.transform, false);
             TextMeshProUGUI ntT =
                 ntTxt.AddComponent<TextMeshProUGUI>();
             ntT.text = ">"; ntT.fontSize = 14f;
@@ -1810,8 +1818,7 @@ public class UIBuilder : MonoBehaviour
             float sx      = slotStartX + (i * slotSpacing);
 
             GameObject slot = new GameObject("Slot_" + i);
-            slot.transform.SetParent(
-                panel.transform, false);
+            slot.transform.SetParent(panel.transform, false);
             RectTransform sRT =
                 slot.AddComponent<RectTransform>();
             sRT.anchoredPosition = new Vector2(sx, -10);
@@ -1825,8 +1832,7 @@ public class UIBuilder : MonoBehaviour
                 OnSlotTapped(pn2, slotIdx));
 
             GameObject sName = new GameObject("SlotName");
-            sName.transform.SetParent(
-                slot.transform, false);
+            sName.transform.SetParent(slot.transform, false);
             TextMeshProUGUI sNameT =
                 sName.AddComponent<TextMeshProUGUI>();
             sNameT.text      = "+ ADD";
@@ -1841,14 +1847,12 @@ public class UIBuilder : MonoBehaviour
             sNameRT.offsetMax = new Vector2(-2, -2);
 
             GameObject sOvr = new GameObject("SlotOvr");
-            sOvr.transform.SetParent(
-                slot.transform, false);
+            sOvr.transform.SetParent(slot.transform, false);
             TextMeshProUGUI sOvrT =
                 sOvr.AddComponent<TextMeshProUGUI>();
             sOvrT.text      = "";
             sOvrT.fontSize  = 9f; sOvrT.color = GOLD;
-            sOvrT.alignment =
-                TextAlignmentOptions.BottomRight;
+            sOvrT.alignment = TextAlignmentOptions.BottomRight;
             RectTransform sOvrRT =
                 sOvr.GetComponent<RectTransform>();
             sOvrRT.anchorMin = Vector2.zero;
@@ -1978,8 +1982,7 @@ public class UIBuilder : MonoBehaviour
                     nameT.color = TEXT;
                 }
                 if (ovrT != null)
-                    ovrT.text =
-                        p.position + " " + p.overall;
+                    ovrT.text = p.position + " " + p.overall;
                 slot.GetComponent<Image>().color =
                     new Color(0.08f, 0.16f, 0.28f, 1f);
             }
@@ -2037,10 +2040,8 @@ public class UIBuilder : MonoBehaviour
             FindFirstObjectByType<GameManager>();
         if (gm == null) return;
 
-        float myVal   =
-            myOffer.Sum(p => gm.GetTradeValue(p));
-        float t2Val   =
-            team2Offer.Sum(p => gm.GetTradeValue(p));
+        float myVal   = myOffer.Sum(p => gm.GetTradeValue(p));
+        float t2Val   = team2Offer.Sum(p => gm.GetTradeValue(p));
         float ratio   = myVal / Mathf.Max(t2Val, 1f);
         bool accepted =
             (ratio >= 0.82f && ratio <= 1.25f) ||
@@ -2074,15 +2075,12 @@ public class UIBuilder : MonoBehaviour
             string result = "TRADE ACCEPTED! " +
                 myTeam.abbreviation + " receives: " +
                 string.Join(", ",
-                    team2Offer.ConvertAll(
-                        p => p.FullName()));
+                    team2Offer.ConvertAll(p => p.FullName()));
             if (isThreeTeam && team3Offer.Count > 0)
                 result += " + " + string.Join(", ",
-                    team3Offer.ConvertAll(
-                        p => p.FullName()));
+                    team3Offer.ConvertAll(p => p.FullName()));
 
-            SetTradeTextColor("TradeResult",
-                result, GREEN);
+            SetTradeTextColor("TradeResult", result, GREEN);
 
             myOffer.Clear(); team2Offer.Clear();
             team3Offer.Clear();
@@ -2130,8 +2128,7 @@ public class UIBuilder : MonoBehaviour
     void SetTradeText(string objName, string value)
     {
         if (tradeScreen == null) return;
-        Transform t =
-            tradeScreen.transform.Find(objName);
+        Transform t = tradeScreen.transform.Find(objName);
         if (t == null) return;
         TextMeshProUGUI tmp =
             t.GetComponent<TextMeshProUGUI>();
@@ -2142,8 +2139,7 @@ public class UIBuilder : MonoBehaviour
                             string value, Color color)
     {
         if (tradeScreen == null) return;
-        Transform t =
-            tradeScreen.transform.Find(objName);
+        Transform t = tradeScreen.transform.Find(objName);
         if (t == null) return;
         TextMeshProUGUI tmp =
             t.GetComponent<TextMeshProUGUI>();
@@ -2161,12 +2157,12 @@ public class UIBuilder : MonoBehaviour
 
         if (cpuTeams.Count > 0)
         {
-            tradeTeam2 = cpuTeams[0];
+            tradeTeam2      = cpuTeams[0];
             tradeTeam2Index = 0;
         }
         if (cpuTeams.Count > 1)
         {
-            tradeTeam3 = cpuTeams[1];
+            tradeTeam3      = cpuTeams[1];
             tradeTeam3Index = 1;
         }
 
@@ -2202,15 +2198,13 @@ public class UIBuilder : MonoBehaviour
         if (threeBtn != null)
         {
             TextMeshProUGUI txt =
-                threeBtn.GetComponentInChildren
-                    <TextMeshProUGUI>();
+                threeBtn.GetComponentInChildren<TextMeshProUGUI>();
             if (txt != null) txt.text = "3-TEAM: OFF";
             threeBtn.GetComponent<Image>().color = SURFACE;
         }
 
         SetTradeText("TradeResult", "");
-        SetTradeText("ValueCompare",
-            "Tap slots to add players");
+        SetTradeText("ValueCompare", "Tap slots to add players");
         RefreshTradePanel("MyPanel");
         RefreshTradePanel("Team2Panel");
         RefreshTradePanel("Team3Panel");
@@ -2368,8 +2362,7 @@ public class UIBuilder : MonoBehaviour
             "DRAFT THIS PLAYER", RED, TEXT,
             new Vector2(0, -120),
             new Vector2(300, 52), 15);
-        GetButton(draftBtn).onClick.AddListener(
-            OnDraftPlayer);
+        GetButton(draftBtn).onClick.AddListener(OnDraftPlayer);
         draftBtn.name = "DraftBtn";
 
         GameObject skipBtn = CreateButton(screen,
@@ -2459,11 +2452,9 @@ public class UIBuilder : MonoBehaviour
         if (isPitcher)
         {
             SetDraftText("PAttr1Label", "PITCHING");
-            SetDraftText("PAttr1Val",
-                p.pitching.ToString());
+            SetDraftText("PAttr1Val",   p.pitching.ToString());
             SetDraftText("PAttr2Label", "STAMINA");
-            SetDraftText("PAttr2Val",
-                p.stamina.ToString());
+            SetDraftText("PAttr2Val",   p.stamina.ToString());
             SetDraftText("PAttr3Label", "POTENTIAL");
             SetDraftText("PAttr3Val",
                 p.age <= 19 ? "HIGH" : "MED");
@@ -2474,14 +2465,11 @@ public class UIBuilder : MonoBehaviour
         else
         {
             SetDraftText("PAttr1Label", "CONTACT");
-            SetDraftText("PAttr1Val",
-                p.contact.ToString());
+            SetDraftText("PAttr1Val",   p.contact.ToString());
             SetDraftText("PAttr2Label", "POWER");
-            SetDraftText("PAttr2Val",
-                p.power.ToString());
+            SetDraftText("PAttr2Val",   p.power.ToString());
             SetDraftText("PAttr3Label", "SPEED");
-            SetDraftText("PAttr3Val",
-                p.speed.ToString());
+            SetDraftText("PAttr3Val",   p.speed.ToString());
             SetDraftText("PAttr4Label", "ETA");
             SetDraftText("PAttr4Val",
                 p.age <= 19 ? "3-4 YRS" : "2-3 YRS");
@@ -2618,8 +2606,7 @@ public class UIBuilder : MonoBehaviour
     void SetDraftText(string objName, string value)
     {
         if (draftScreen == null) return;
-        Transform t =
-            draftScreen.transform.Find(objName);
+        Transform t = draftScreen.transform.Find(objName);
         if (t == null) return;
         TextMeshProUGUI tmp =
             t.GetComponent<TextMeshProUGUI>();
@@ -2630,8 +2617,7 @@ public class UIBuilder : MonoBehaviour
                             string value, Color color)
     {
         if (draftScreen == null) return;
-        Transform t =
-            draftScreen.transform.Find(objName);
+        Transform t = draftScreen.transform.Find(objName);
         if (t == null) return;
         TextMeshProUGUI tmp =
             t.GetComponent<TextMeshProUGUI>();
@@ -2759,8 +2745,7 @@ public class UIBuilder : MonoBehaviour
         GetButton(prevFA).onClick.AddListener(() =>
         {
             faIndex--;
-            if (faIndex < 0)
-                faIndex = faPool.Count - 1;
+            if (faIndex < 0) faIndex = faPool.Count - 1;
             RefreshFACard();
         });
 
@@ -2781,13 +2766,11 @@ public class UIBuilder : MonoBehaviour
 
         AddText(screen, "OfferLabel",
             "YOUR OFFER", 10, SUBTEXT,
-            new Vector2(0, 34),
-            new Vector2(340, 20));
+            new Vector2(0, 34), new Vector2(340, 20));
 
         AddText(screen, "SalLabel",
             "SALARY / YR", 9, SUBTEXT,
-            new Vector2(-80, 14),
-            new Vector2(100, 18));
+            new Vector2(-80, 14), new Vector2(100, 18));
 
         GameObject salDown = CreateButton(screen,
             "-", BORDER, TEXT,
@@ -2795,8 +2778,7 @@ public class UIBuilder : MonoBehaviour
             new Vector2(30, 30), 16);
         GetButton(salDown).onClick.AddListener(() =>
         {
-            offerSalary = Mathf.Max(0.72f,
-                offerSalary - 0.5f);
+            offerSalary = Mathf.Max(0.72f, offerSalary - 0.5f);
             RefreshOfferDisplay();
         });
 
@@ -2817,8 +2799,7 @@ public class UIBuilder : MonoBehaviour
 
         AddText(screen, "YrLabel",
             "YEARS", 9, SUBTEXT,
-            new Vector2(80, 14),
-            new Vector2(80, 18));
+            new Vector2(80, 14), new Vector2(80, 18));
 
         GameObject yrDown = CreateButton(screen,
             "-", BORDER, TEXT,
@@ -2990,8 +2971,7 @@ public class UIBuilder : MonoBehaviour
         {
             SetFATextColor("FAResult",
                 p.FullName() + " rejected — try $" +
-                (market * 0.8f).ToString("F1") +
-                "M+", RED);
+                (market * 0.8f).ToString("F1") + "M+", RED);
             return;
         }
 
@@ -3061,9 +3041,7 @@ public class UIBuilder : MonoBehaviour
         AddImage(screen, "BG", BG,
             Vector2.zero, new Vector2(390, 844));
 
-        // -------------------------------------------------------
-        // SCOREBOARD
-        // -------------------------------------------------------
+        // Scoreboard
         AddImage(screen, "Scoreboard",
             new Color(0.02f, 0.05f, 0.10f, 1f),
             new Vector2(0, 358), new Vector2(390, 104));
@@ -3112,7 +3090,7 @@ public class UIBuilder : MonoBehaviour
                     new Vector2(1, 80));
         }
 
-        // R H E section
+        // R H E
         AddImage(screen, "RHEBg",
             new Color(0.06f, 0.12f, 0.20f, 1f),
             new Vector2(152, 358), new Vector2(78, 104));
@@ -3146,9 +3124,7 @@ public class UIBuilder : MonoBehaviour
             new Vector2(0, 270),
             new Vector2(120, 24));
 
-        // -------------------------------------------------------
-        // COUNT DISPLAY
-        // -------------------------------------------------------
+        // Count display
         AddImage(screen, "CountBG", SURFACE,
             new Vector2(0, 300), new Vector2(390, 28));
 
@@ -3157,12 +3133,9 @@ public class UIBuilder : MonoBehaviour
 
         for (int i = 0; i < 4; i++)
         {
-            GameObject dot =
-                new GameObject("BallDot_" + i);
-            dot.transform.SetParent(
-                screen.transform, false);
-            RectTransform dRT =
-                dot.AddComponent<RectTransform>();
+            GameObject dot = new GameObject("BallDot_" + i);
+            dot.transform.SetParent(screen.transform, false);
+            RectTransform dRT = dot.AddComponent<RectTransform>();
             dRT.anchoredPosition =
                 new Vector2(-82 + (i * 16), 300);
             dRT.sizeDelta = new Vector2(12, 12);
@@ -3174,12 +3147,9 @@ public class UIBuilder : MonoBehaviour
 
         for (int i = 0; i < 3; i++)
         {
-            GameObject dot =
-                new GameObject("StrikeDot_" + i);
-            dot.transform.SetParent(
-                screen.transform, false);
-            RectTransform dRT =
-                dot.AddComponent<RectTransform>();
+            GameObject dot = new GameObject("StrikeDot_" + i);
+            dot.transform.SetParent(screen.transform, false);
+            RectTransform dRT = dot.AddComponent<RectTransform>();
             dRT.anchoredPosition =
                 new Vector2(14 + (i * 16), 300);
             dRT.sizeDelta = new Vector2(12, 12);
@@ -3191,21 +3161,16 @@ public class UIBuilder : MonoBehaviour
 
         for (int i = 0; i < 3; i++)
         {
-            GameObject dot =
-                new GameObject("OutDot_" + i);
-            dot.transform.SetParent(
-                screen.transform, false);
-            RectTransform dRT =
-                dot.AddComponent<RectTransform>();
+            GameObject dot = new GameObject("OutDot_" + i);
+            dot.transform.SetParent(screen.transform, false);
+            RectTransform dRT = dot.AddComponent<RectTransform>();
             dRT.anchoredPosition =
                 new Vector2(104 + (i * 16), 300);
             dRT.sizeDelta = new Vector2(12, 12);
             dot.AddComponent<Image>().color = BORDER;
         }
 
-        // -------------------------------------------------------
-        // BALLPARK VIEW
-        // -------------------------------------------------------
+        // Ballpark
         AddImage(screen, "OutfieldGrass",
             new Color(0.04f, 0.22f, 0.08f, 1f),
             new Vector2(0, 165), new Vector2(390, 200));
@@ -3277,9 +3242,7 @@ public class UIBuilder : MonoBehaviour
         AddImage(screen, "FoulPoleR", GOLD,
             new Vector2(188, 220), new Vector2(3, 80));
 
-        // -------------------------------------------------------
-        // MATCHUP DISPLAY
-        // -------------------------------------------------------
+        // Matchup
         AddImage(screen, "MatchupBG", SURFACE,
             new Vector2(0, 50), new Vector2(390, 58));
 
@@ -3308,9 +3271,7 @@ public class UIBuilder : MonoBehaviour
             new Vector2(80, 42),
             new Vector2(160, 20));
 
-        // -------------------------------------------------------
-        // PLAY BY PLAY
-        // -------------------------------------------------------
+        // Play by play
         AddImage(screen, "PBPBg",
             new Color(0.04f, 0.08f, 0.14f, 1f),
             new Vector2(0, -30), new Vector2(390, 60));
@@ -3325,13 +3286,10 @@ public class UIBuilder : MonoBehaviour
             new Vector2(0, -38),
             new Vector2(370, 22));
 
-        // -------------------------------------------------------
-        // DECISION BUTTONS
-        // -------------------------------------------------------
+        // Decision buttons
         AddImage(screen, "DecisionBG", SURFACE,
             new Vector2(0, -100), new Vector2(390, 80));
 
-        // Pitching buttons
         GameObject pitchBtn = CreateButton(screen,
             "PITCH", RED, TEXT,
             new Vector2(0, -100),
@@ -3344,8 +3302,7 @@ public class UIBuilder : MonoBehaviour
             new Vector2(-130, -100),
             new Vector2(80, 54), 11);
         AddBorder(pullBtn, BORDER, 2);
-        GetButton(pullBtn).onClick.AddListener(
-            OnPullPitcher);
+        GetButton(pullBtn).onClick.AddListener(OnPullPitcher);
         pullBtn.name = "PullBtn";
 
         GameObject ibbBtn = CreateButton(screen,
@@ -3356,7 +3313,6 @@ public class UIBuilder : MonoBehaviour
         GetButton(ibbBtn).onClick.AddListener(OnIBB);
         ibbBtn.name = "IBBBtn";
 
-        // Batting buttons
         GameObject swingBtn = CreateButton(screen,
             "SWING", GREEN, BG,
             new Vector2(0, -100),
@@ -3380,14 +3336,12 @@ public class UIBuilder : MonoBehaviour
         GetButton(buntBtn).onClick.AddListener(OnBunt);
         buntBtn.name = "BuntBtn";
 
-        // Sim rest and exit
         GameObject autoBtn = CreateButton(screen,
             "SIM REST", SURFACE, SUBTEXT,
             new Vector2(-90, -165),
             new Vector2(130, 38), 12);
         AddBorder(autoBtn, BORDER, 2);
-        GetButton(autoBtn).onClick.AddListener(
-            OnSimRestOfGame);
+        GetButton(autoBtn).onClick.AddListener(OnSimRestOfGame);
 
         GameObject exitBtn2 = CreateButton(screen,
             "EXIT GAME", SURFACE, SUBTEXT,
@@ -3400,9 +3354,7 @@ public class UIBuilder : MonoBehaviour
             ShowScreen(teamScreen);
         });
 
-        // -------------------------------------------------------
-        // GAME OVER OVERLAY
-        // -------------------------------------------------------
+        // Game over overlay
         GameObject gameOverPanel =
             new GameObject("GameOverPanel");
         gameOverPanel.transform.SetParent(
@@ -3444,6 +3396,30 @@ public class UIBuilder : MonoBehaviour
         return screen;
     }
 
+    // Reset per-game stats for a team
+    void ResetGameStats(Team team)
+    {
+        if (team?.roster == null) return;
+        foreach (Player p in team.roster)
+        {
+            p.atBats           = 0;
+            p.hits             = 0;
+            p.singles          = 0;
+            p.doubles          = 0;
+            p.triples          = 0;
+            p.homeRuns         = 0;
+            p.rbi              = 0;
+            p.runs             = 0;
+            p.walks            = 0;
+            p.strikeouts       = 0;
+            p.inningsPitched   = 0;
+            p.earnedRuns       = 0;
+            p.hitsAllowed      = 0;
+            p.walksAllowed     = 0;
+            p.strikeoutsThrown = 0;
+        }
+    }
+
     // Start a live game
     public void StartLiveGame(Team home, Team away)
     {
@@ -3473,6 +3449,10 @@ public class UIBuilder : MonoBehaviour
         homeErrors     = 0;
         awayErrors     = 0;
 
+        // Reset game stats for all players
+        ResetGameStats(home);
+        ResetGameStats(away);
+
         // Use pitching rotation
         GameManager gm =
             FindFirstObjectByType<GameManager>();
@@ -3493,12 +3473,10 @@ public class UIBuilder : MonoBehaviour
                 : 0;
 
             homePitcherIndex = homeSPs.Count > 0
-                ? home.roster.IndexOf(
-                    homeSPs[homeRotIdx])
+                ? home.roster.IndexOf(homeSPs[homeRotIdx])
                 : 0;
             awayPitcherIndex = awaySPs.Count > 0
-                ? away.roster.IndexOf(
-                    awaySPs[awayRotIdx])
+                ? away.roster.IndexOf(awaySPs[awayRotIdx])
                 : 0;
 
             gm.AdvanceRotation(home.abbreviation);
@@ -3563,21 +3541,21 @@ public class UIBuilder : MonoBehaviour
                 Player bat = batters[idx];
                 SetGameText("BatterName", bat.FullName());
                 SetGameText("BatterInfo",
-                    bat.position + " | OVR: " +
-                    bat.overall);
+                    bat.position + " | OVR: " + bat.overall);
             }
         }
 
         if (pitching?.roster != null)
         {
-            List<Player> sps = pitching.roster.FindAll(
-                p => p.position == "SP");
-            if (sps.Count > 0)
+            List<Player> allP = pitching.roster.FindAll(
+                p => p.position == "SP" ||
+                     p.position == "RP");
+            if (allP.Count > 0)
             {
                 int idx = isTopInning
-                    ? homePitcherIndex % sps.Count
-                    : awayPitcherIndex % sps.Count;
-                Player pit = sps[idx];
+                    ? homePitcherIndex % allP.Count
+                    : awayPitcherIndex % allP.Count;
+                Player pit = allP[idx];
                 SetGameText("PitcherName", pit.FullName());
                 SetGameText("PitcherInfo",
                     pit.throwingArm + "HP | OVR: " +
@@ -3614,13 +3592,10 @@ public class UIBuilder : MonoBehaviour
             Color homeCol =
                 i == currentInning - 1 ? GOLD : TEXT;
 
-            SetGameTextColor("InnAway_" + i,
-                awayVal, awayCol);
-            SetGameTextColor("InnHome_" + i,
-                homeVal, homeCol);
+            SetGameTextColor("InnAway_" + i, awayVal, awayCol);
+            SetGameTextColor("InnHome_" + i, homeVal, homeCol);
 
-            float cx     = colStart +
-                           ((i - offset) * colW);
+            float cx     = colStart + ((i - offset) * colW);
             bool visible = (i - offset) >= 0 &&
                            (i - offset) < 9;
 
@@ -3634,22 +3609,19 @@ public class UIBuilder : MonoBehaviour
             if (hdr != null)
             {
                 hdr.GetComponent<RectTransform>()
-                    .anchoredPosition =
-                    new Vector2(cx, 397);
+                    .anchoredPosition = new Vector2(cx, 397);
                 hdr.gameObject.SetActive(visible);
             }
             if (away != null)
             {
                 away.GetComponent<RectTransform>()
-                    .anchoredPosition =
-                    new Vector2(cx, 378);
+                    .anchoredPosition = new Vector2(cx, 378);
                 away.gameObject.SetActive(visible);
             }
             if (home != null)
             {
                 home.GetComponent<RectTransform>()
-                    .anchoredPosition =
-                    new Vector2(cx, 350);
+                    .anchoredPosition = new Vector2(cx, 350);
                 home.gameObject.SetActive(visible);
             }
         }
@@ -3670,31 +3642,19 @@ public class UIBuilder : MonoBehaviour
             (isTopInning  && homeTeam == GetMyTeam()) ||
             (!isTopInning && awayTeam == GetMyTeam());
 
-        Transform pitch = liveGameScreen.transform
-            .Find("PitchBtn");
-        Transform pull  = liveGameScreen.transform
-            .Find("PullBtn");
-        Transform ibb   = liveGameScreen.transform
-            .Find("IBBBtn");
-        Transform swing = liveGameScreen.transform
-            .Find("SwingBtn");
-        Transform take  = liveGameScreen.transform
-            .Find("TakeBtn");
-        Transform bunt  = liveGameScreen.transform
-            .Find("BuntBtn");
+        Transform pitch = liveGameScreen.transform.Find("PitchBtn");
+        Transform pull  = liveGameScreen.transform.Find("PullBtn");
+        Transform ibb   = liveGameScreen.transform.Find("IBBBtn");
+        Transform swing = liveGameScreen.transform.Find("SwingBtn");
+        Transform take  = liveGameScreen.transform.Find("TakeBtn");
+        Transform bunt  = liveGameScreen.transform.Find("BuntBtn");
 
-        if (pitch != null)
-            pitch.gameObject.SetActive(playerIsFielding);
-        if (pull  != null)
-            pull.gameObject.SetActive(playerIsFielding);
-        if (ibb   != null)
-            ibb.gameObject.SetActive(playerIsFielding);
-        if (swing != null)
-            swing.gameObject.SetActive(!playerIsFielding);
-        if (take  != null)
-            take.gameObject.SetActive(!playerIsFielding);
-        if (bunt  != null)
-            bunt.gameObject.SetActive(!playerIsFielding);
+        if (pitch != null) pitch.gameObject.SetActive(playerIsFielding);
+        if (pull  != null) pull.gameObject.SetActive(playerIsFielding);
+        if (ibb   != null) ibb.gameObject.SetActive(playerIsFielding);
+        if (swing != null) swing.gameObject.SetActive(!playerIsFielding);
+        if (take  != null) take.gameObject.SetActive(!playerIsFielding);
+        if (bunt  != null) bunt.gameObject.SetActive(!playerIsFielding);
     }
 
     void UpdateDots(string prefix, int total,
@@ -3713,8 +3673,7 @@ public class UIBuilder : MonoBehaviour
 
     void UpdateRunner(string name, bool onBase)
     {
-        Transform r =
-            liveGameScreen.transform.Find(name);
+        Transform r = liveGameScreen.transform.Find(name);
         if (r == null) return;
         Image img = r.GetComponent<Image>();
         if (img == null) return;
@@ -3734,6 +3693,9 @@ public class UIBuilder : MonoBehaviour
             playByPlay.Count > 1 ? playByPlay[1] : "");
     }
 
+    // -------------------------------------------------------
+    // PITCH
+    // -------------------------------------------------------
     void OnPitch()
     {
         if (!gameInProgress || gameOver) return;
@@ -3754,33 +3716,52 @@ public class UIBuilder : MonoBehaviour
             : homeBatterIndex % batters.Count;
         Player batter = batters[batterIdx];
 
-        List<Player> sps = pitching.roster.FindAll(
+        List<Player> allPitchers = pitching.roster.FindAll(
             p => p.position == "SP" ||
                  p.position == "RP");
-        if (sps.Count == 0) return;
+        if (allPitchers.Count == 0) return;
 
         int pitcherIdx = isTopInning
-            ? homePitcherIndex % sps.Count
-            : awayPitcherIndex % sps.Count;
-        Player pitcher = sps[pitcherIdx];
+            ? homePitcherIndex % allPitchers.Count
+            : awayPitcherIndex % allPitchers.Count;
+        Player pitcher = allPitchers[pitcherIdx];
 
         string result = SimulateAtBat(batter, pitcher);
         ProcessAtBatResult(result, batter, batting);
+
+        // Track pitcher game + season strikeouts
+        if (result == "STRIKEOUT")
+        {
+            pitcher.strikeoutsThrown++;
+            pitcher.seasonStrikeoutsThrown++;
+        }
+
+        // Track pitcher game + season hits allowed
+        if (result == "SINGLE"  || result == "DOUBLE" ||
+            result == "TRIPLE"  || result == "HOME RUN")
+        {
+            pitcher.hitsAllowed++;
+            pitcher.seasonHitsAllowed++;
+        }
+
+        // Track pitcher game + season walks
+        if (result == "WALK")
+        {
+            pitcher.walksAllowed++;
+            pitcher.seasonWalksAllowed++;
+        }
+
         RefreshGameDisplay();
     }
 
     string SimulateAtBat(Player batter, Player pitcher)
     {
-        float hr  = 3.3f +
-            (batter.power   - 50) / 200f * 2f;
+        float hr  = 3.3f + (batter.power   - 50) / 200f * 2f;
         float tri = 0.6f;
-        float dbl = 5.3f +
-            (batter.power   - 50) / 200f;
-        float sng = 15f  +
-            (batter.contact - 50) / 200f * 3f;
+        float dbl = 5.3f + (batter.power   - 50) / 200f;
+        float sng = 15f  + (batter.contact - 50) / 200f * 3f;
         float bb  = 8.5f;
-        float so  = 22.5f -
-            (batter.contact - 50) / 200f * 3f;
+        float so  = 22.5f - (batter.contact - 50) / 200f * 3f;
 
         float pitchMod = (pitcher.pitching - 50) / 200f;
         so  += pitchMod * 3f;
@@ -3802,6 +3783,9 @@ public class UIBuilder : MonoBehaviour
         return "OUT";
     }
 
+    // -------------------------------------------------------
+    // AT BAT RESULTS — tracks game + season stats
+    // -------------------------------------------------------
     void ProcessAtBatResult(string result,
                              Player batter, Team batting)
     {
@@ -3811,11 +3795,34 @@ public class UIBuilder : MonoBehaviour
         {
             case "HOME RUN":
                 RecordHit(batting);
+                batter.atBats++;        batter.seasonAtBats++;
+                batter.homeRuns++;      batter.seasonHomeRuns++;
+                batter.hits++;          batter.seasonHits++;
                 int runs = 1;
                 if (gameOnBase1) runs++;
                 if (gameOnBase2) runs++;
                 if (gameOnBase3) runs++;
+                batter.rbi       += runs;
+                batter.seasonRbi += runs;
                 AddRuns(batting, runs);
+
+                // Charge earned runs to pitcher
+                Team pit1 = isTopInning ? homeTeam : awayTeam;
+                if (pit1?.roster != null)
+                {
+                    List<Player> pp = pit1.roster.FindAll(
+                        p => p.position == "SP" ||
+                             p.position == "RP");
+                    if (pp.Count > 0)
+                    {
+                        int pidx = isTopInning
+                            ? homePitcherIndex % pp.Count
+                            : awayPitcherIndex % pp.Count;
+                        pp[pidx].earnedRuns += runs;
+                        pp[pidx].seasonEarnedRuns += runs;
+                    }
+                }
+
                 gameOnBase1 = gameOnBase2 =
                     gameOnBase3 = false;
                 string hrType =
@@ -3828,19 +3835,15 @@ public class UIBuilder : MonoBehaviour
 
             case "TRIPLE":
                 RecordHit(batting);
+                batter.atBats++;    batter.seasonAtBats++;
+                batter.triples++;   batter.seasonTriples++;
+                batter.hits++;      batter.seasonHits++;
                 int triRBI = 0;
-                if (gameOnBase3)
-                {
-                    AddRuns(batting, 1); triRBI++;
-                }
-                if (gameOnBase2)
-                {
-                    AddRuns(batting, 1); triRBI++;
-                }
-                if (gameOnBase1)
-                {
-                    AddRuns(batting, 1); triRBI++;
-                }
+                if (gameOnBase3) { AddRuns(batting, 1); triRBI++; }
+                if (gameOnBase2) { AddRuns(batting, 1); triRBI++; }
+                if (gameOnBase1) { AddRuns(batting, 1); triRBI++; }
+                batter.rbi       += triRBI;
+                batter.seasonRbi += triRBI;
                 gameOnBase1 = gameOnBase2 = false;
                 gameOnBase3 = true;
                 AddPlay(name + (triRBI > 0
@@ -3850,15 +3853,14 @@ public class UIBuilder : MonoBehaviour
 
             case "DOUBLE":
                 RecordHit(batting);
+                batter.atBats++;    batter.seasonAtBats++;
+                batter.doubles++;   batter.seasonDoubles++;
+                batter.hits++;      batter.seasonHits++;
                 int dblRBI = 0;
-                if (gameOnBase3)
-                {
-                    AddRuns(batting, 1); dblRBI++;
-                }
-                if (gameOnBase2)
-                {
-                    AddRuns(batting, 1); dblRBI++;
-                }
+                if (gameOnBase3) { AddRuns(batting, 1); dblRBI++; }
+                if (gameOnBase2) { AddRuns(batting, 1); dblRBI++; }
+                batter.rbi       += dblRBI;
+                batter.seasonRbi += dblRBI;
                 gameOnBase3 = gameOnBase1;
                 gameOnBase2 = true;
                 gameOnBase1 = false;
@@ -3869,11 +3871,13 @@ public class UIBuilder : MonoBehaviour
 
             case "SINGLE":
                 RecordHit(batting);
+                batter.atBats++;    batter.seasonAtBats++;
+                batter.singles++;   batter.seasonSingles++;
+                batter.hits++;      batter.seasonHits++;
                 int sngRBI = 0;
-                if (gameOnBase3)
-                {
-                    AddRuns(batting, 1); sngRBI++;
-                }
+                if (gameOnBase3) { AddRuns(batting, 1); sngRBI++; }
+                batter.rbi       += sngRBI;
+                batter.seasonRbi += sngRBI;
                 gameOnBase3 = gameOnBase2;
                 gameOnBase2 = gameOnBase1;
                 gameOnBase1 = true;
@@ -3883,9 +3887,15 @@ public class UIBuilder : MonoBehaviour
                 break;
 
             case "WALK":
+                batter.walks++;
+                batter.seasonWalks++;
                 if (gameOnBase1 && gameOnBase2 &&
                     gameOnBase3)
+                {
                     AddRuns(batting, 1);
+                    batter.rbi++;
+                    batter.seasonRbi++;
+                }
                 gameOnBase3 =
                     (gameOnBase2 && gameOnBase1)
                     ? true : gameOnBase3;
@@ -3896,6 +3906,8 @@ public class UIBuilder : MonoBehaviour
                 break;
 
             case "STRIKEOUT":
+                batter.atBats++;        batter.seasonAtBats++;
+                batter.strikeouts++;    batter.seasonStrikeouts++;
                 outs++;
                 AddPlay(name + " — STRIKEOUT");
                 AdvanceBatter(batting);
@@ -3903,6 +3915,8 @@ public class UIBuilder : MonoBehaviour
                 return;
 
             case "OUT":
+                batter.atBats++;
+                batter.seasonAtBats++;
                 outs++;
                 AddPlay(name + " — OUT");
                 AdvanceBatter(batting);
@@ -3945,8 +3959,7 @@ public class UIBuilder : MonoBehaviour
         if (currentInning < 9) return;
         if (homeScore > awayScore)
         {
-            AddPlay("WALK-OFF! " +
-                    homeTeam.city + " WIN!");
+            AddPlay("WALK-OFF! " + homeTeam.city + " WIN!");
             EndGame();
         }
     }
@@ -3955,6 +3968,125 @@ public class UIBuilder : MonoBehaviour
     {
         if (batting == awayTeam) awayBatterIndex++;
         else                     homeBatterIndex++;
+    }
+
+    // -------------------------------------------------------
+    // INNING MANAGEMENT + BULLPEN
+    // -------------------------------------------------------
+
+    // Credit inning to active pitcher (game + season)
+    void CreditInningToPitcher(Team pitching, bool isHome)
+    {
+        if (pitching?.roster == null) return;
+
+        List<Player> allPitchers = pitching.roster.FindAll(
+            p => p.position == "SP" ||
+                 p.position == "RP");
+        if (allPitchers.Count == 0) return;
+
+        int idx = isHome
+            ? homePitcherIndex % allPitchers.Count
+            : awayPitcherIndex % allPitchers.Count;
+
+        allPitchers[idx].inningsPitched++;
+        allPitchers[idx].seasonInningsPitched++;
+    }
+
+    // Auto pull tired starters and bring in bullpen
+    void AutoManageBullpen(Team pitching, bool isHome)
+    {
+        if (pitching?.roster == null) return;
+
+        List<Player> relievers = pitching.roster.FindAll(
+            p => p.position == "RP" &&
+                 !usedRelievers.Contains(p) &&
+                 !p.isInjured);
+
+        if (relievers.Count == 0) return;
+
+        List<Player> allPitchers = pitching.roster.FindAll(
+            p => p.position == "SP" ||
+                 p.position == "RP");
+        if (allPitchers.Count == 0) return;
+
+        int pitcherIdx = isHome
+            ? homePitcherIndex
+            : awayPitcherIndex;
+
+        int activeIdx = pitcherIdx % allPitchers.Count;
+        Player activePitcher = allPitchers[activeIdx];
+
+        bool isStarter    = activePitcher.position == "SP";
+        bool shouldPull   = false;
+        string reason     = "";
+
+        if (isStarter)
+        {
+            // Pull starter after 5 innings
+            if (activePitcher.inningsPitched >= 5)
+            {
+                shouldPull = true;
+                reason = "has thrown " +
+                    activePitcher.inningsPitched + " innings";
+            }
+            // Pull if struggling after 3 innings
+            if (activePitcher.inningsPitched >= 3 &&
+                activePitcher.earnedRuns >= 4)
+            {
+                shouldPull = true;
+                reason = "is struggling";
+            }
+        }
+        else
+        {
+            // Pull reliever after 2 innings
+            if (activePitcher.inningsPitched >= 2)
+            {
+                shouldPull = true;
+                reason = "has thrown " +
+                    activePitcher.inningsPitched + " innings";
+            }
+        }
+
+        if (!shouldPull) return;
+
+        // Pick best reliever for the inning
+        Player newPitcher = null;
+
+        if (currentInning >= 9)
+            newPitcher = relievers.Find(
+                p => p.bullpenRole == "CL");
+
+        if (newPitcher == null && currentInning >= 8)
+            newPitcher = relievers.Find(
+                p => p.bullpenRole == "SU");
+
+        if (newPitcher == null)
+            newPitcher = relievers.Find(
+                p => p.bullpenRole == "MR");
+
+        if (newPitcher == null && relievers.Count > 0)
+        {
+            relievers.Sort((a, b) =>
+                b.pitching.CompareTo(a.pitching));
+            newPitcher = relievers[0];
+        }
+
+        if (newPitcher == null) return;
+
+        usedRelievers.Add(newPitcher);
+        int newIdx = pitching.roster.IndexOf(newPitcher);
+
+        if (isHome) homePitcherIndex = newIdx;
+        else        awayPitcherIndex = newIdx;
+
+        AddPlay("PITCHING CHANGE: " +
+                activePitcher.FullName() +
+                " (" + reason + ") → " +
+                newPitcher.FullName() +
+                (newPitcher.bullpenRole != "" ?
+                 " (" + newPitcher.bullpenRole + ")" :
+                 " (RP)"));
     }
 
     void CheckInningOver()
@@ -3968,9 +4100,12 @@ public class UIBuilder : MonoBehaviour
 
         if (isTopInning)
         {
+            // Credit inning + auto manage bullpen
+            CreditInningToPitcher(homeTeam, true);
+            AutoManageBullpen(homeTeam, true);
+
             isTopInning = false;
-            AddPlay("--- END TOP " +
-                    currentInning + " ---");
+            AddPlay("--- END TOP " + currentInning + " ---");
 
             if (currentInning >= 9 &&
                 homeScore > awayScore)
@@ -3983,6 +4118,10 @@ public class UIBuilder : MonoBehaviour
         }
         else
         {
+            // Credit inning + auto manage bullpen
+            CreditInningToPitcher(awayTeam, false);
+            AutoManageBullpen(awayTeam, false);
+
             isTopInning = true;
             currentInning++;
             AddPlay("--- END INNING " +
@@ -4008,45 +4147,9 @@ public class UIBuilder : MonoBehaviour
         gameOver       = true;
         gameInProgress = false;
 
-        Transform gameOverPanel = liveGameScreen
-            .transform.Find("GameOverPanel");
-        if (gameOverPanel != null)
-        {
-            gameOverPanel.gameObject.SetActive(true);
-
-            Transform score =
-                gameOverPanel.Find("GOScore");
-            if (score != null)
-            {
-                TextMeshProUGUI s =
-                    score.GetComponent<TextMeshProUGUI>();
-                if (s != null)
-                    s.text = awayScore + " - " + homeScore;
-            }
-
-            Transform result =
-                gameOverPanel.Find("GOResult");
-            if (result != null)
-            {
-                TextMeshProUGUI r =
-                    result.GetComponent<TextMeshProUGUI>();
-                if (r != null)
-                {
-                    bool playerWon =
-                        (homeTeam == GetMyTeam() &&
-                         homeScore > awayScore) ||
-                        (awayTeam == GetMyTeam() &&
-                         awayScore > homeScore);
-                    r.text  = playerWon ?
-                        "YOU WIN!" : "YOU LOSE";
-                    r.color = playerWon ? GREEN : RED;
-                }
-            }
-        }
-
         AddPlay("FINAL: " +
-                awayTeam.abbreviation + " " +
-                awayScore + " — " +
+                awayTeam.abbreviation + " " + awayScore +
+                " — " +
                 homeTeam.abbreviation + " " + homeScore);
 
         // Record result and auto-save
@@ -4061,8 +4164,15 @@ public class UIBuilder : MonoBehaviour
             gm.SaveGame(currentSaveSlot);
             Debug.Log("Auto-saved after game!");
         }
+
+        // Show box score
+        ShowBoxScore(homeTeam, awayTeam,
+                     homeScore, awayScore);
     }
 
+    // -------------------------------------------------------
+    // PITCHING DECISIONS
+    // -------------------------------------------------------
     void OnPullPitcher()
     {
         Team pitching = isTopInning ? homeTeam : awayTeam;
@@ -4089,8 +4199,7 @@ public class UIBuilder : MonoBehaviour
             .Find("RelieverPicker");
         if (old != null) Destroy(old.gameObject);
 
-        GameObject picker =
-            new GameObject("RelieverPicker");
+        GameObject picker = new GameObject("RelieverPicker");
         picker.transform.SetParent(
             liveGameScreen.transform, false);
         RectTransform pRT =
@@ -4142,49 +4251,41 @@ public class UIBuilder : MonoBehaviour
             Button rowBtn = row.AddComponent<Button>();
 
             GameObject nameObj = new GameObject("Name");
-            nameObj.transform.SetParent(
-                row.transform, false);
+            nameObj.transform.SetParent(row.transform, false);
             TextMeshProUGUI nameT =
                 nameObj.AddComponent<TextMeshProUGUI>();
             nameT.text      = rp.FullName();
             nameT.fontSize  = 13f;
             nameT.color     = TEXT;
-            nameT.alignment =
-                TextAlignmentOptions.MidlineLeft;
+            nameT.alignment = TextAlignmentOptions.MidlineLeft;
             RectTransform nameRT =
                 nameObj.GetComponent<RectTransform>();
-            nameRT.anchoredPosition =
-                new Vector2(-50, 8);
-            nameRT.sizeDelta = new Vector2(200, 30);
+            nameRT.anchoredPosition = new Vector2(-50, 8);
+            nameRT.sizeDelta         = new Vector2(200, 30);
 
             GameObject roleObj = new GameObject("Role");
-            roleObj.transform.SetParent(
-                row.transform, false);
+            roleObj.transform.SetParent(row.transform, false);
             TextMeshProUGUI roleT =
                 roleObj.AddComponent<TextMeshProUGUI>();
             roleT.text      = rp.bullpenRole != "" ?
                 rp.bullpenRole : "RP";
             roleT.fontSize  = 11f;
             roleT.color     = SUBTEXT;
-            roleT.alignment =
-                TextAlignmentOptions.MidlineLeft;
+            roleT.alignment = TextAlignmentOptions.MidlineLeft;
             RectTransform roleRT =
                 roleObj.GetComponent<RectTransform>();
-            roleRT.anchoredPosition =
-                new Vector2(-50, -10);
-            roleRT.sizeDelta = new Vector2(100, 22);
+            roleRT.anchoredPosition = new Vector2(-50, -10);
+            roleRT.sizeDelta         = new Vector2(100, 22);
 
             GameObject ovrObj = new GameObject("Ovr");
-            ovrObj.transform.SetParent(
-                row.transform, false);
+            ovrObj.transform.SetParent(row.transform, false);
             TextMeshProUGUI ovrT =
                 ovrObj.AddComponent<TextMeshProUGUI>();
             ovrT.text      = "OVR " + rp.pitching;
             ovrT.fontSize  = 13f;
             ovrT.color     = GetOverallColor(rp.overall);
             ovrT.fontStyle = FontStyles.Bold;
-            ovrT.alignment =
-                TextAlignmentOptions.MidlineRight;
+            ovrT.alignment = TextAlignmentOptions.MidlineRight;
             RectTransform ovrRT =
                 ovrObj.GetComponent<RectTransform>();
             ovrRT.anchoredPosition = new Vector2(120, 0);
@@ -4248,6 +4349,9 @@ public class UIBuilder : MonoBehaviour
         RefreshGameDisplay();
     }
 
+    // -------------------------------------------------------
+    // BATTING DECISIONS
+    // -------------------------------------------------------
     void OnTakePitch()
     {
         if (!gameInProgress || gameOver) return;
@@ -4294,16 +4398,14 @@ public class UIBuilder : MonoBehaviour
             outs++;
             if (gameOnBase2) gameOnBase3 = true;
             if (gameOnBase1) gameOnBase2 = true;
-            AddPlay(batter.FullName() +
-                    " — SACRIFICE BUNT");
+            AddPlay(batter.FullName() + " — SACRIFICE BUNT");
             AdvanceBatter(batting);
             CheckInningOver();
         }
         else
         {
             ProcessAtBatResult("SINGLE", batter, batting);
-            AddPlay(batter.FullName() +
-                    " — BUNT SINGLE!");
+            AddPlay(batter.FullName() + " — BUNT SINGLE!");
         }
 
         RefreshGameDisplay();
@@ -4333,18 +4435,15 @@ public class UIBuilder : MonoBehaviour
         while (!gameOver && gameInProgress &&
                iterations < maxIterations)
         {
-            Team batting  =
-                isTopInning ? awayTeam : homeTeam;
-            Team pitching =
-                isTopInning ? homeTeam : awayTeam;
+            Team batting  = isTopInning ? awayTeam : homeTeam;
+            Team pitching = isTopInning ? homeTeam : awayTeam;
 
             if (batting?.roster == null) break;
 
             List<Player> batters = batting.roster.FindAll(
                 p => p.position != "SP" &&
                      p.position != "RP");
-            List<Player> pitchers =
-                pitching.roster.FindAll(
+            List<Player> pitchers = pitching.roster.FindAll(
                 p => p.position == "SP" ||
                      p.position == "RP");
 
@@ -4382,8 +4481,7 @@ public class UIBuilder : MonoBehaviour
     void SetGameText(string objName, string value)
     {
         if (liveGameScreen == null) return;
-        Transform t =
-            liveGameScreen.transform.Find(objName);
+        Transform t = liveGameScreen.transform.Find(objName);
         if (t == null) return;
         TextMeshProUGUI tmp =
             t.GetComponent<TextMeshProUGUI>();
@@ -4394,8 +4492,7 @@ public class UIBuilder : MonoBehaviour
                            string value, Color color)
     {
         if (liveGameScreen == null) return;
-        Transform t =
-            liveGameScreen.transform.Find(objName);
+        Transform t = liveGameScreen.transform.Find(objName);
         if (t == null) return;
         TextMeshProUGUI tmp =
             t.GetComponent<TextMeshProUGUI>();
@@ -4404,6 +4501,463 @@ public class UIBuilder : MonoBehaviour
             tmp.text  = value;
             tmp.color = color;
         }
+    }
+
+    // -------------------------------------------------------
+    // BOX SCORE SCREEN
+    // -------------------------------------------------------
+    GameObject BuildBoxScoreScreen(GameObject canvas)
+    {
+        GameObject screen =
+            CreateScreen(canvas, "BoxScore");
+
+        BuildImageBackground(screen, "background");
+        AddImage(screen, "Overlay",
+            new Color(0.03f, 0.05f, 0.10f, 0.95f),
+            Vector2.zero, new Vector2(390, 844));
+
+        AddImage(screen, "Header", SURFACE,
+            new Vector2(0, 380), new Vector2(390, 88));
+
+        AddText(screen, "BSTitle",
+            "BOX SCORE", 22, TEXT,
+            new Vector2(0, 388),
+            new Vector2(300, 36), FontStyles.Bold);
+
+        // Final score bar
+        AddImage(screen, "ScoreBG",
+            new Color(0.06f, 0.12f, 0.20f, 1f),
+            new Vector2(0, 310), new Vector2(374, 60));
+
+        AddText(screen, "BSAwayTeam",
+            "AWY", 12, SUBTEXT,
+            new Vector2(-110, 320),
+            new Vector2(120, 28));
+
+        AddText(screen, "BSAwayScore",
+            "0", 28, TEXT,
+            new Vector2(-20, 310),
+            new Vector2(50, 48), FontStyles.Bold);
+
+        AddText(screen, "BSVs",
+            "—", 16, SUBTEXT,
+            new Vector2(0, 310),
+            new Vector2(24, 48));
+
+        AddText(screen, "BSHomeScore",
+            "0", 28, TEXT,
+            new Vector2(20, 310),
+            new Vector2(50, 48), FontStyles.Bold);
+
+        AddText(screen, "BSHomeTeam",
+            "HME", 12, SUBTEXT,
+            new Vector2(110, 320),
+            new Vector2(120, 28));
+
+        AddText(screen, "BSResult",
+            "", 12, GOLD,
+            new Vector2(0, 282),
+            new Vector2(300, 22));
+
+        // MY TEAM / OPPONENT tabs
+        AddImage(screen, "BSTabBG", SURFACE,
+            new Vector2(0, 258), new Vector2(374, 32));
+
+        GameObject homeTab = CreateButton(screen,
+            "MY TEAM", SURFACE, GOLD,
+            new Vector2(-95, 258),
+            new Vector2(170, 32), 11);
+        homeTab.name = "BSHomeTab";
+        GetButton(homeTab).onClick.AddListener(() =>
+        {
+            boxScoreShowingHome = true;
+            RefreshBoxScoreRows();
+            SetBSTabColors();
+        });
+
+        GameObject awayTab = CreateButton(screen,
+            "OPPONENT", SURFACE, SUBTEXT,
+            new Vector2(95, 258),
+            new Vector2(170, 32), 11);
+        awayTab.name = "BSAwayTab";
+        GetButton(awayTab).onClick.AddListener(() =>
+        {
+            boxScoreShowingHome = false;
+            RefreshBoxScoreRows();
+            SetBSTabColors();
+        });
+
+        AddImage(screen, "BSTabLine", RED,
+            new Vector2(-95, 243), new Vector2(170, 3));
+
+        // Batting column headers
+        AddImage(screen, "BatHeader",
+            new Color(0.08f, 0.18f, 0.30f, 1f),
+            new Vector2(0, 228), new Vector2(374, 24));
+
+        AddText(screen, "BatHeaderLabel",
+            "BATTING", 10, GOLD,
+            new Vector2(-95, 228),
+            new Vector2(130, 24), FontStyles.Bold);
+
+        AddText(screen, "BatAB",  "AB",  9, SUBTEXT,
+            new Vector2(50,  228), new Vector2(28, 24));
+        AddText(screen, "BatH",   "H",   9, SUBTEXT,
+            new Vector2(78,  228), new Vector2(28, 24));
+        AddText(screen, "BatHR",  "HR",  9, SUBTEXT,
+            new Vector2(106, 228), new Vector2(28, 24));
+        AddText(screen, "BatRBI", "RBI", 9, SUBTEXT,
+            new Vector2(134, 228), new Vector2(28, 24));
+        AddText(screen, "BatAVG", "AVG", 9, SUBTEXT,
+            new Vector2(162, 228), new Vector2(36, 24));
+
+        // 9 batter rows
+        for (int i = 0; i < 9; i++)
+        {
+            float rowY = 206f - (i * 22f);
+            Color rowColor = i % 2 == 0
+                ? new Color(0.05f, 0.10f, 0.18f, 0.97f)
+                : new Color(0.04f, 0.08f, 0.15f, 0.97f);
+
+            GameObject row =
+                new GameObject("BatRow_" + i);
+            row.transform.SetParent(
+                screen.transform, false);
+            RectTransform rRT =
+                row.AddComponent<RectTransform>();
+            rRT.anchoredPosition = new Vector2(0, rowY);
+            rRT.sizeDelta        = new Vector2(374, 20);
+            row.AddComponent<Image>().color = rowColor;
+
+            AddTextToParent(row, "Name", "",
+                8.5f, TEXT, new Vector2(-85f, 0f),
+                new Vector2(155f, 20f),
+                TextAlignmentOptions.MidlineLeft);
+
+            AddTextToParent(row, "AB", "",
+                9f, TEXT, new Vector2(50f, 0f),
+                new Vector2(28f, 20f),
+                TextAlignmentOptions.Midline);
+
+            AddTextToParent(row, "H", "",
+                9f, TEXT, new Vector2(78f, 0f),
+                new Vector2(28f, 20f),
+                TextAlignmentOptions.Midline);
+
+            AddTextToParent(row, "HR", "",
+                9f, TEXT, new Vector2(106f, 0f),
+                new Vector2(28f, 20f),
+                TextAlignmentOptions.Midline);
+
+            AddTextToParent(row, "RBI", "",
+                9f, TEXT, new Vector2(134f, 0f),
+                new Vector2(28f, 20f),
+                TextAlignmentOptions.Midline);
+
+            AddTextToParent(row, "AVG", "",
+                9f, GOLD, new Vector2(162f, 0f),
+                new Vector2(36f, 20f),
+                TextAlignmentOptions.Midline);
+        }
+
+        // Pitching column headers
+        AddImage(screen, "PitHeader",
+            new Color(0.08f, 0.18f, 0.30f, 1f),
+            new Vector2(0, -2), new Vector2(374, 24));
+
+        AddText(screen, "PitHeaderLabel",
+            "PITCHING", 10, GOLD,
+            new Vector2(-95, -2),
+            new Vector2(130, 24), FontStyles.Bold);
+
+        AddText(screen, "PitIP", "IP", 9, SUBTEXT,
+            new Vector2(50,  -2), new Vector2(28, 24));
+        AddText(screen, "PitH",  "H",  9, SUBTEXT,
+            new Vector2(78,  -2), new Vector2(28, 24));
+        AddText(screen, "PitER", "ER", 9, SUBTEXT,
+            new Vector2(106, -2), new Vector2(28, 24));
+        AddText(screen, "PitBB", "BB", 9, SUBTEXT,
+            new Vector2(134, -2), new Vector2(28, 24));
+        AddText(screen, "PitK",  "K",  9, SUBTEXT,
+            new Vector2(162, -2), new Vector2(28, 24));
+
+        // 3 pitcher rows
+        for (int i = 0; i < 3; i++)
+        {
+            float rowY = -24f - (i * 22f);
+            Color rowColor = i % 2 == 0
+                ? new Color(0.05f, 0.10f, 0.18f, 0.97f)
+                : new Color(0.04f, 0.08f, 0.15f, 0.97f);
+
+            GameObject row =
+                new GameObject("PitRow_" + i);
+            row.transform.SetParent(
+                screen.transform, false);
+            RectTransform rRT =
+                row.AddComponent<RectTransform>();
+            rRT.anchoredPosition = new Vector2(0, rowY);
+            rRT.sizeDelta        = new Vector2(374, 20);
+            row.AddComponent<Image>().color = rowColor;
+
+            AddTextToParent(row, "Name", "",
+                8.5f, TEXT, new Vector2(-85f, 0f),
+                new Vector2(155f, 20f),
+                TextAlignmentOptions.MidlineLeft);
+
+            AddTextToParent(row, "IP", "",
+                9f, TEXT, new Vector2(50f, 0f),
+                new Vector2(28f, 20f),
+                TextAlignmentOptions.Midline);
+
+            AddTextToParent(row, "H", "",
+                9f, TEXT, new Vector2(78f, 0f),
+                new Vector2(28f, 20f),
+                TextAlignmentOptions.Midline);
+
+            AddTextToParent(row, "ER", "",
+                9f, TEXT, new Vector2(106f, 0f),
+                new Vector2(28f, 20f),
+                TextAlignmentOptions.Midline);
+
+            AddTextToParent(row, "BB", "",
+                9f, TEXT, new Vector2(134f, 0f),
+                new Vector2(28f, 20f),
+                TextAlignmentOptions.Midline);
+
+            AddTextToParent(row, "K", "",
+                9f, TEXT, new Vector2(162f, 0f),
+                new Vector2(28f, 20f),
+                TextAlignmentOptions.Midline);
+        }
+
+        // HR log
+        AddImage(screen, "HRBg", SURFACE,
+            new Vector2(0, -100), new Vector2(374, 24));
+        AddText(screen, "HRLog",
+            "", 10, GOLD,
+            new Vector2(0, -100),
+            new Vector2(360, 24));
+
+        // Continue button
+        GameObject contBtn = CreateButton(screen,
+            "CONTINUE", RED, TEXT,
+            new Vector2(0, -155),
+            new Vector2(280, 52), 16);
+        GetButton(contBtn).onClick.AddListener(() =>
+        {
+            ShowScreen(teamScreen);
+            if (currentTeam != null)
+                PopulateTeamScreen(currentTeam);
+        });
+
+        screen.SetActive(false);
+        return screen;
+    }
+
+    // Set tab highlight colors
+    void SetBSTabColors()
+    {
+        Transform homeTab =
+            boxScoreScreen.transform.Find("BSHomeTab");
+        Transform awayTab =
+            boxScoreScreen.transform.Find("BSAwayTab");
+        Transform tabLine =
+            boxScoreScreen.transform.Find("BSTabLine");
+
+        if (homeTab != null)
+        {
+            TextMeshProUGUI t =
+                homeTab.GetComponentInChildren<TextMeshProUGUI>();
+            if (t != null)
+                t.color = boxScoreShowingHome ? GOLD : SUBTEXT;
+        }
+        if (awayTab != null)
+        {
+            TextMeshProUGUI t =
+                awayTab.GetComponentInChildren<TextMeshProUGUI>();
+            if (t != null)
+                t.color = boxScoreShowingHome ? SUBTEXT : GOLD;
+        }
+        if (tabLine != null)
+        {
+            RectTransform rt =
+                tabLine.GetComponent<RectTransform>();
+            if (rt != null)
+                rt.anchoredPosition = new Vector2(
+                    boxScoreShowingHome ? -95f : 95f, 243);
+        }
+    }
+
+    // Refresh batting and pitching rows for selected team
+    void RefreshBoxScoreRows()
+    {
+        Team showTeam = boxScoreShowingHome
+            ? homeTeam : awayTeam;
+
+        // Batters
+        List<Player> batters = new List<Player>();
+        if (showTeam?.roster != null)
+        {
+            batters = showTeam.roster.FindAll(
+                p => p.position != "SP" &&
+                     p.position != "RP" &&
+                     p.atBats > 0);
+            batters.Sort((a, b) =>
+                b.hits.CompareTo(a.hits));
+        }
+
+        string hrLog = "";
+
+        for (int i = 0; i < 9; i++)
+        {
+            Transform row = boxScoreScreen.transform
+                .Find("BatRow_" + i);
+            if (row == null) continue;
+
+            if (i < batters.Count)
+            {
+                Player p = batters[i];
+                SetBSRowText(row, "Name", p.FullName());
+                SetBSRowText(row, "AB",
+                    p.atBats.ToString());
+                SetBSRowText(row, "H",
+                    p.hits.ToString());
+                SetBSRowText(row, "HR",
+                    p.homeRuns.ToString());
+                SetBSRowText(row, "RBI",
+                    p.rbi.ToString());
+                SetBSRowText(row, "AVG",
+                    p.atBats > 0
+                        ? ((float)p.hits / p.atBats)
+                           .ToString("F3")
+                        : ".000");
+
+                if (p.homeRuns > 0)
+                {
+                    if (hrLog != "") hrLog += "  ";
+                    hrLog += p.lastName +
+                             " (" + p.homeRuns + ")";
+                }
+            }
+            else
+            {
+                SetBSRowText(row, "Name", "");
+                SetBSRowText(row, "AB",   "");
+                SetBSRowText(row, "H",    "");
+                SetBSRowText(row, "HR",   "");
+                SetBSRowText(row, "RBI",  "");
+                SetBSRowText(row, "AVG",  "");
+            }
+        }
+
+        SetBSText("HRLog",
+            hrLog != "" ? "HR: " + hrLog : "");
+
+        // Pitchers
+        List<Player> pitchers = new List<Player>();
+        if (showTeam?.roster != null)
+        {
+            pitchers = showTeam.roster.FindAll(
+                p => (p.position == "SP" ||
+                      p.position == "RP") &&
+                     p.inningsPitched > 0);
+        }
+
+        for (int i = 0; i < 3; i++)
+        {
+            Transform row = boxScoreScreen.transform
+                .Find("PitRow_" + i);
+            if (row == null) continue;
+
+            if (i < pitchers.Count)
+            {
+                Player p = pitchers[i];
+                SetBSRowText(row, "Name", p.FullName());
+                SetBSRowText(row, "IP",
+                    p.inningsPitched.ToString());
+                SetBSRowText(row, "H",
+                    p.hitsAllowed.ToString());
+                SetBSRowText(row, "ER",
+                    p.earnedRuns.ToString());
+                SetBSRowText(row, "BB",
+                    p.walksAllowed.ToString());
+                SetBSRowText(row, "K",
+                    p.strikeoutsThrown.ToString());
+            }
+            else
+            {
+                SetBSRowText(row, "Name", "");
+                SetBSRowText(row, "IP",   "");
+                SetBSRowText(row, "H",    "");
+                SetBSRowText(row, "ER",   "");
+                SetBSRowText(row, "BB",   "");
+                SetBSRowText(row, "K",    "");
+            }
+        }
+    }
+
+    // Show box score after game ends
+    public void ShowBoxScore(
+        Team home, Team away,
+        int homeScoreFinal, int awayScoreFinal)
+    {
+        if (boxScoreScreen == null) return;
+
+        SetBSText("BSAwayTeam",
+            away.city + " " + away.nickname);
+        SetBSText("BSHomeTeam",
+            home.city + " " + home.nickname);
+        SetBSText("BSAwayScore",
+            awayScoreFinal.ToString());
+        SetBSText("BSHomeScore",
+            homeScoreFinal.ToString());
+
+        bool playerWon =
+            (home == GetMyTeam() &&
+             homeScoreFinal > awayScoreFinal) ||
+            (away == GetMyTeam() &&
+             awayScoreFinal > homeScoreFinal);
+
+        SetBSText("BSResult",
+            playerWon ? "YOU WIN!" : "YOU LOSE");
+
+        Transform resultT =
+            boxScoreScreen.transform.Find("BSResult");
+        if (resultT != null)
+        {
+            TextMeshProUGUI tmp =
+                resultT.GetComponent<TextMeshProUGUI>();
+            if (tmp != null)
+                tmp.color = playerWon ? GREEN : RED;
+        }
+
+        // Default to player's team
+        boxScoreShowingHome = (home == GetMyTeam());
+        RefreshBoxScoreRows();
+        SetBSTabColors();
+
+        ShowScreen(boxScoreScreen);
+    }
+
+    void SetBSText(string objName, string value)
+    {
+        if (boxScoreScreen == null) return;
+        Transform t =
+            boxScoreScreen.transform.Find(objName);
+        if (t == null) return;
+        TextMeshProUGUI tmp =
+            t.GetComponent<TextMeshProUGUI>();
+        if (tmp != null) tmp.text = value;
+    }
+
+    void SetBSRowText(Transform row, string name,
+                       string value)
+    {
+        Transform t = row.Find(name);
+        if (t == null) return;
+        TextMeshProUGUI tmp =
+            t.GetComponent<TextMeshProUGUI>();
+        if (tmp != null) tmp.text = value;
     }
 
     // -------------------------------------------------------
@@ -4434,8 +4988,7 @@ public class UIBuilder : MonoBehaviour
             nb.transform.SetParent(nav.transform, false);
             RectTransform nRT =
                 nb.AddComponent<RectTransform>();
-            nRT.anchoredPosition =
-                new Vector2(xPos[i], 0);
+            nRT.anchoredPosition = new Vector2(xPos[i], 0);
             nRT.sizeDelta        = new Vector2(60, 70);
             nb.AddComponent<Image>().color = Color.clear;
             Button nBtn = nb.AddComponent<Button>();
@@ -4508,6 +5061,8 @@ public class UIBuilder : MonoBehaviour
             faScreen.SetActive(false);
         if (liveGameScreen   != null)
             liveGameScreen.SetActive(false);
+        if (boxScoreScreen   != null)
+            boxScoreScreen.SetActive(false);
         if (screen           != null)
             screen.SetActive(true);
         currentScreen = screen;
