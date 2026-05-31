@@ -500,6 +500,7 @@ public class UIBuilder : MonoBehaviour
         {
             ShowScreen(teamScreen);
             PopulateTeamScreen(savedTeam);
+            RefreshSeriesTracker();
         }
     }
 
@@ -938,15 +939,19 @@ public class UIBuilder : MonoBehaviour
         exitBtn.name = "ExitBtn";
 
         AddText(screen, "TeamName",
-            "TEAM NAME", 20, TEXT,
-            new Vector2(20, 385),
-            new Vector2(220, 44), FontStyles.Bold);
+            "TEAM NAME", 16, TEXT,
+            new Vector2(20, 390),
+            new Vector2(220, 32), FontStyles.Bold);
 
         AddText(screen, "Record",
-            "0-0", 13, GOLD,
-            new Vector2(20, 357),
-            new Vector2(200, 24));
+            "0-0", 11, GOLD,
+            new Vector2(20, 363),
+            new Vector2(200, 16));
 
+        AddText(screen, "SeriesTracker",
+            "", 10, SUBTEXT,
+            new Vector2(20, 349),
+            new Vector2(240, 16));
         AddImage(screen, "TabBar", SURFACE,
             new Vector2(0, 313), new Vector2(390, 40));
 
@@ -1158,6 +1163,9 @@ public class UIBuilder : MonoBehaviour
             team.nickname.ToUpper());
         SetTeamText("Record",
             team.wins + " - " + team.losses);
+
+        // Update series tracker
+        RefreshSeriesTracker();
 
         Transform hint =
             teamScreen.transform.Find("RosterHint");
@@ -1461,6 +1469,94 @@ public class UIBuilder : MonoBehaviour
 
         ShowPreGame(home, away);
     }
+
+
+    void RefreshSeriesTracker()
+    {
+        GameManager gm =
+            FindFirstObjectByType<GameManager>();
+
+        Transform t = teamScreen.transform
+            .Find("SeriesTracker");
+        if (t == null) return;
+
+        TextMeshProUGUI txt =
+            t.GetComponent<TextMeshProUGUI>();
+        if (txt == null) return;
+
+        if (gm == null || gm.seasonComplete)
+        {
+            txt.text  = "SEASON COMPLETE";
+            txt.color = GOLD;
+            return;
+        }
+
+        if (gm.schedule == null ||
+            gm.schedule.Count == 0)
+        {
+            txt.text  = "";
+            return;
+        }
+
+        ScheduledSeries series =
+            gm.GetCurrentSeries();
+
+        if (series == null)
+        {
+            txt.text  = "SEASON COMPLETE";
+            txt.color = GOLD;
+            return;
+        }
+
+        string oppAbbr =
+            series.homeTeam == selectedTeam
+                ? series.awayTeam
+                : series.homeTeam;
+
+        bool isHome =
+            series.homeTeam == selectedTeam;
+
+        string homeAway = isHome ? "vs" : "@";
+
+        int myWins = isHome
+            ? series.homeWins
+            : series.awayWins;
+        int oppWins = isHome
+            ? series.awayWins
+            : series.homeWins;
+
+        string seriesStatus;
+        Color  seriesColor;
+
+        if (myWins > oppWins)
+        {
+            seriesStatus = "Lead " +
+                myWins + "-" + oppWins;
+            seriesColor  = GREEN;
+        }
+        else if (myWins < oppWins)
+        {
+            seriesStatus = "Trail " +
+                myWins + "-" + oppWins;
+            seriesColor  = RED;
+        }
+        else
+        {
+            seriesStatus = "Tied " +
+                myWins + "-" + oppWins;
+            seriesColor  = GOLD;
+        }
+
+        int gameInSeries = series.gamesPlayed + 1;
+
+        txt.text = homeAway + " " + oppAbbr +
+                   "  •  Game " + gameInSeries +
+                   " of " + series.numGames +
+                   "  •  " + seriesStatus;
+        txt.color = seriesColor;
+
+    }
+
 
 
     // -------------------------------------------------------
@@ -5996,11 +6092,6 @@ public class UIBuilder : MonoBehaviour
             new Vector2(0, 390),
             new Vector2(340, 36), FontStyles.Bold);
 
-        AddText(screen, "PGGameNum",
-            "GAME 1", 13, GOLD,
-            new Vector2(0, 358),
-            new Vector2(300, 24));
-
         // Team tabs
         AddImage(screen, "PGTabBG", SURFACE,
             new Vector2(0, 318), new Vector2(390, 36));
@@ -6057,14 +6148,14 @@ public class UIBuilder : MonoBehaviour
             new Color(0.08f, 0.18f, 0.30f, 1f),
             new Vector2(0, 243), new Vector2(374, 24));
 
-        AddText(screen, "PGColPos", "#  POS", 9, GOLD,
-            new Vector2(-130, 243), new Vector2(80, 24));
+        AddText(screen, "PGColPos", "POS", 9, GOLD,
+            new Vector2(-155, 243), new Vector2(36, 24));
         AddText(screen, "PGColName", "PLAYER", 9, GOLD,
-            new Vector2(-30, 243), new Vector2(120, 24));
+            new Vector2(-55, 243), new Vector2(140, 24));
         AddText(screen, "PGColOVR", "OVR", 9, GOLD,
-            new Vector2(110, 243), new Vector2(40, 24));
+            new Vector2(108, 243), new Vector2(36, 24));
         AddText(screen, "PGColAVG", "AVG", 9, GOLD,
-            new Vector2(155, 243), new Vector2(40, 24));
+            new Vector2(152, 243), new Vector2(36, 24));
 
         // 9 lineup rows
         for (int i = 0; i < 9; i++)
@@ -6087,32 +6178,32 @@ public class UIBuilder : MonoBehaviour
             // Batting order number
             AddTextToParent(row, "Num",
                 (i + 1) + ".",
-                9f, SUBTEXT, new Vector2(-168f, 0f),
-                new Vector2(24f, 20f),
+                9f, SUBTEXT, new Vector2(-172f, 0f),
+                new Vector2(20f, 20f),
                 TextAlignmentOptions.Midline);
 
             // Position
             AddTextToParent(row, "Pos", "",
-                9f, RED, new Vector2(-145f, 0f),
+                9f, RED, new Vector2(-155f, 0f),
                 new Vector2(36f, 20f),
                 TextAlignmentOptions.Midline);
 
             // Player name
             AddTextToParent(row, "Name", "",
-                9f, TEXT, new Vector2(-30f, 0f),
+                9f, TEXT, new Vector2(-55f, 0f),
                 new Vector2(160f, 20f),
                 TextAlignmentOptions.MidlineLeft);
 
             // Overall
             AddTextToParent(row, "OVR", "",
-                9f, SUBTEXT, new Vector2(110f, 0f),
-                new Vector2(40f, 20f),
+                9f, SUBTEXT, new Vector2(108f, 0f),
+                new Vector2(36f, 20f),
                 TextAlignmentOptions.Midline);
 
             // Season AVG
             AddTextToParent(row, "AVG", "",
-                9f, GOLD, new Vector2(155f, 0f),
-                new Vector2(40f, 20f),
+                9f, GOLD, new Vector2(152f, 0f),
+                new Vector2(36f, 20f),
                 TextAlignmentOptions.Midline);
         }
 
@@ -6171,8 +6262,7 @@ public class UIBuilder : MonoBehaviour
         SetPGText("PGMatchup",
             away.abbreviation + "  vs  " +
             home.abbreviation);
-        SetPGText("PGGameNum",
-            "GAME " + pgGameNumber);
+
 
         // Random weather
         string[] conditions =

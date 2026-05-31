@@ -54,6 +54,10 @@ public class GameManager : MonoBehaviour
         new List<ScheduledSeries>();
     public int currentSeriesIndex = 0;
 
+    // Persists recent results across save/load
+    public List<ScheduledSeries> savedRecentResults =
+        new List<ScheduledSeries>();
+
 
     // -------------------------------------------------------
     // START
@@ -91,8 +95,6 @@ public class GameManager : MonoBehaviour
     {
         BuildAllRosters();
         franchiseManager.StartNewFranchise("NYA", "James", 1);
-        // Don't generate schedule here —
-        // wait until player picks their team
 
         Debug.Log("Rosters ready! Total teams: " +
                   dataLoader.allTeams.Count);
@@ -143,6 +145,7 @@ public class GameManager : MonoBehaviour
         // Clear old standings from previous save
         finalWins.Clear();
         finalLosses.Clear();
+        savedRecentResults.Clear();
 
         // Reset all team records to 0-0
         if (dataLoader?.allTeams != null)
@@ -244,9 +247,9 @@ public class GameManager : MonoBehaviour
         // Division rivals — 13 games each (3+3+4+3)
         foreach (Team rival in divRivals)
         {
-            AddSeries(playerTeam, rival,     3);
+            AddSeries(playerTeam, rival,      3);
             AddSeries(rival,      playerTeam, 3);
-            AddSeries(playerTeam, rival,     4);
+            AddSeries(playerTeam, rival,      4);
             AddSeries(rival,      playerTeam, 3);
         }
 
@@ -471,7 +474,6 @@ public class GameManager : MonoBehaviour
              i < schedule.Count &&
              upcoming.Count < n; i++)
         {
-            // Include current AND future series
             upcoming.Add(schedule[i]);
         }
         return upcoming;
@@ -481,12 +483,27 @@ public class GameManager : MonoBehaviour
     {
         List<ScheduledSeries> results =
             new List<ScheduledSeries>();
+
+        // First get from live schedule
         for (int i = currentSeriesIndex - 1;
              i >= 0 && results.Count < n; i--)
         {
             if (schedule[i].isComplete)
                 results.Add(schedule[i]);
         }
+
+        // Fill remainder from saved results after load
+        foreach (ScheduledSeries s in savedRecentResults)
+        {
+            if (results.Count >= n) break;
+            bool already = results.Exists(
+                r => r.homeTeam == s.homeTeam &&
+                     r.awayTeam == s.awayTeam &&
+                     r.dayStart == s.dayStart);
+            if (!already)
+                results.Add(s);
+        }
+
         return results;
     }
 
@@ -590,12 +607,54 @@ public class GameManager : MonoBehaviour
         {
             Debug.Log("Loaded slot " + slot);
 
-            // Regenerate schedule after load
-            // so SCHEDULE screen has data
+            // Grab restored values before schedule wipes them
+            int  savedGames    = totalGamesPlayed;
+            int  savedSeries   = currentSeriesIndex;
+            bool savedComplete = seasonComplete;
+
+            // Regenerate schedule structure
             GenerateSeasonSchedule();
 
-            Debug.Log("Schedule regenerated after load: " +
-                schedule.Count + " series");
+            // Restore progress counters
+            totalGamesPlayed   = savedGames;
+            currentSeriesIndex = savedSeries;
+            seasonComplete     = savedComplete;
+
+            // Restore current series game progress
+            // by re-reading directly from PlayerPrefs
+            string saveKey = "BMP_Save_" + (slot + 1);
+            if (PlayerPrefs.HasKey(saveKey))
+            {
+                string json =
+                    PlayerPrefs.GetString(saveKey);
+                SaveSystem.SaveData data =
+                    JsonUtility.FromJson
+                    <SaveSystem.SaveData>(json);
+
+                if (data != null &&
+                    schedule != null &&
+                    currentSeriesIndex < schedule.Count)
+                {
+                    ScheduledSeries cur =
+                        schedule[currentSeriesIndex];
+                    cur.gamesPlayed =
+                        data.currentSeriesGamesPlayed;
+                    cur.homeWins    =
+                        data.currentSeriesHomeWins;
+                    cur.awayWins    =
+                        data.currentSeriesAwayWins;
+
+                    Debug.Log("Series restored: game " +
+                        cur.gamesPlayed + " of " +
+                        cur.numGames +
+                        " H:" + cur.homeWins +
+                        " A:" + cur.awayWins);
+                }
+            }
+
+            Debug.Log("Loaded: game " +
+                totalGamesPlayed + " series " +
+                currentSeriesIndex);
         }
         return loaded;
     }
@@ -692,7 +751,7 @@ public class GameManager : MonoBehaviour
 
         RecordSeriesGame(playerWon, playerIsHome);
 
-        // *** FIXED: only called ONCE ***
+        // Called ONCE per player game
         SimulateCPUGamesForDay();
 
         Debug.Log("WIN: " + homeAbbr +
@@ -753,7 +812,7 @@ public class GameManager : MonoBehaviour
     }
 
     // -------------------------------------------------------
-    // CPU GAME SIMULATION — called ONCE per player game
+    // CPU GAME SIMULATION
     // -------------------------------------------------------
     public void SimulateCPUGamesForDay()
     {
@@ -763,7 +822,6 @@ public class GameManager : MonoBehaviour
             franchiseManager.franchise
                 .playerTeamAbbreviation;
 
-        // All non-player teams sorted by fewest games played
         List<Team> cpuTeams = dataLoader.allTeams
             .FindAll(t => t.abbreviation != playerAbbr);
 
@@ -781,9 +839,8 @@ public class GameManager : MonoBehaviour
             if (playedToday.Contains(home.abbreviation))
                 continue;
 
-            // Find opponent with fewest games played
-            Team away     = null;
-            int  fewest   = int.MaxValue;
+            Team away   = null;
+            int  fewest = int.MaxValue;
 
             for (int j = i + 1; j < cpuTeams.Count; j++)
             {
