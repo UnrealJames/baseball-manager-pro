@@ -124,7 +124,6 @@ public class UIBuilder : MonoBehaviour
     int           awayHits        = 0;
     int           homeErrors      = 0;
     int           awayErrors      = 0;
-    RectTransform CurInnHighlight = null;
     float         sbColStart      = -118f;
     float         sbColW          = 26f;
 
@@ -132,10 +131,8 @@ public class UIBuilder : MonoBehaviour
     // Pre-game
     Team         pgHomeTeam      = null;
     Team         pgAwayTeam      = null;
-    int          pgHomeLineupIdx = 0;
-    int          pgAwayLineupIdx = 0;
     bool         pgShowingHome   = true;
-    int          pgGameNumber    = 1;
+    int          pgGameNumber    = 0;
     List<Player> pgHomeLineup    = new List<Player>();
     List<Player> pgAwayLineup    = new List<Player>();
 
@@ -1084,17 +1081,28 @@ public class UIBuilder : MonoBehaviour
             RefreshPlayerCard();
         });
 
-        GameObject simBtn = CreateButton(screen,
-            "SIMULATE SEASON", GREEN, BG,
+        // Schedule button — opens calendar view
+        GameObject schedBtn = CreateButton(screen,
+            "SCHEDULE", SURFACE, GOLD,
             new Vector2(0, -270),
             new Vector2(200, 44), 14);
+        AddBorder(schedBtn, BORDER, 2);
+        GetButton(schedBtn).onClick.AddListener(() =>
+            ShowScheduleDialog());
+        schedBtn.name = "ScheduleBtn";
+
+        // Simulate season — smaller, tucked below
+        GameObject simBtn = CreateButton(screen,
+            "SIM SEASON", GREEN, BG,
+            new Vector2(0, -322),
+            new Vector2(200, 36), 12);
         GetButton(simBtn).onClick.AddListener(() =>
             OnSimulateSeason());
         simBtn.name = "SimBtn";
 
         GameObject liveBtn = CreateButton(screen,
             "PLAY LIVE GAME", RED, TEXT,
-            new Vector2(0, -320),
+            new Vector2(0, -365),
             new Vector2(200, 44), 14);
         GetButton(liveBtn).onClick.AddListener(() =>
             OnPlayLiveGame());
@@ -1395,21 +1403,404 @@ public class UIBuilder : MonoBehaviour
         return 0;
     }
 
-      void OnPlayLiveGame()
+    void OnPlayLiveGame()
     {
+        GameManager gm =
+            FindFirstObjectByType<GameManager>();
+
+        // Block if season is over
+        if (gm != null && gm.seasonComplete)
+        {
+            ShowSeasonCompleteDialog();
+            return;
+        }
+
+        // Block if over 162 games
+        if (gm != null &&
+            gm.totalGamesPlayed >= gm.maxGamesPerSeason)
+        {
+            ShowSeasonCompleteDialog();
+            return;
+        }
+
         Team myTeam = GetMyTeam();
         if (myTeam == null) return;
 
-        List<Team> opponents = dataLoader.allTeams.FindAll(
-            t => t.abbreviation != selectedTeam);
-        if (opponents.Count == 0) return;
+        // Use scheduled opponent if available
+        ScheduledSeries series =
+            gm?.GetCurrentSeries();
 
-        Team opponent =
-            opponents[Random.Range(0, opponents.Count)];
+        Team opponent = null;
+        if (series != null)
+        {
+            string oppAbbr =
+                series.homeTeam == selectedTeam
+                    ? series.awayTeam
+                    : series.homeTeam;
+            opponent = dataLoader.allTeams.Find(
+                t => t.abbreviation == oppAbbr);
+        }
 
-        // Show pre-game screen first
-        ShowPreGame(myTeam, opponent);
+        // Fallback to random
+        if (opponent == null)
+        {
+            List<Team> opponents =
+                dataLoader.allTeams.FindAll(
+                    t => t.abbreviation != selectedTeam);
+            if (opponents.Count == 0) return;
+            opponent = opponents[
+                Random.Range(0, opponents.Count)];
+        }
+
+        // Home or away based on schedule
+        bool playerIsHome = series == null ||
+            series.homeTeam == selectedTeam;
+
+        Team home = playerIsHome ? myTeam : opponent;
+        Team away = playerIsHome ? opponent : myTeam;
+
+        ShowPreGame(home, away);
     }
+
+
+    // -------------------------------------------------------
+    // SCHEDULE / CALENDAR DIALOG
+    // -------------------------------------------------------
+    void ShowScheduleDialog()
+    {
+        GameManager gm =
+            FindFirstObjectByType<GameManager>();
+        if (gm == null) return;
+
+        // ADD THIS:
+        Debug.Log("Schedule count: " + gm.schedule.Count +
+                  " seriesIndex: " + gm.currentSeriesIndex);
+
+        // Remove old dialog
+        Transform old =
+            teamScreen.transform.Find("ScheduleDialog");
+        if (old != null) Destroy(old.gameObject);
+
+        GameObject dialog =
+            new GameObject("ScheduleDialog");
+        dialog.transform.SetParent(
+            teamScreen.transform, false);
+        RectTransform dRT =
+            dialog.AddComponent<RectTransform>();
+        // Fill entire screen
+        dRT.anchorMin        = Vector2.zero;
+        dRT.anchorMax        = Vector2.one;
+        dRT.offsetMin        = Vector2.zero;
+        dRT.offsetMax        = Vector2.zero;
+        dRT.anchoredPosition = Vector2.zero;
+        dRT.sizeDelta        = Vector2.zero;
+        dialog.AddComponent<Image>().color =
+            new Color(0.03f, 0.05f, 0.10f, 1f);
+
+        // Header
+        AddImage(dialog, "Header", SURFACE,
+            new Vector2(0, 380), new Vector2(390, 88));
+
+        AddText(dialog, "Title",
+            "SCHEDULE", 22, TEXT,
+            new Vector2(0, 388),
+            new Vector2(300, 36), FontStyles.Bold);
+
+        // Games played counter
+        string gamesInfo =
+            gm.totalGamesPlayed + " / " +
+            gm.maxGamesPerSeason + " GAMES";
+        AddText(dialog, "GamesPlayed",
+            gamesInfo, 12, GOLD,
+            new Vector2(0, 358),
+            new Vector2(300, 24));
+
+        // Close button
+        GameObject closeBtn = CreateButton(dialog,
+            "CLOSE", SURFACE, SUBTEXT,
+            new Vector2(150, 380),
+            new Vector2(70, 36), 12);
+        AddBorder(closeBtn, BORDER, 2);
+        GetButton(closeBtn).onClick.AddListener(() =>
+            Destroy(dialog));
+
+        // Current series banner
+        ScheduledSeries current = gm.GetCurrentSeries();
+        if (current != null && !gm.seasonComplete)
+        {
+            AddImage(dialog, "CurrentBG",
+                new Color(0.15f, 0.05f, 0.05f, 1f),
+                new Vector2(0, 308),
+                new Vector2(374, 64));
+
+            AddImage(dialog, "CurrentBorder", RED,
+                new Vector2(0, 277),
+                new Vector2(374, 2));
+
+            string oppAbbr =
+                current.homeTeam == selectedTeam
+                    ? current.awayTeam
+                    : current.homeTeam;
+            bool isHome =
+                current.homeTeam == selectedTeam;
+
+            string oppName = GetTeamFullName(oppAbbr);
+            string homeAway = isHome ? "vs" : "@";
+
+            AddText(dialog, "CurrentLabel",
+                "NOW PLAYING", 9, RED,
+                new Vector2(-120, 328),
+                new Vector2(100, 18),
+                FontStyles.Bold);
+
+            AddText(dialog, "CurrentMatchup",
+                homeAway + "  " + oppName,
+                15, TEXT,
+                new Vector2(20, 328),
+                new Vector2(220, 24),
+                FontStyles.Bold);
+
+            // Series score
+            int myWins = isHome
+                ? current.homeWins
+                : current.awayWins;
+            int oppWins = isHome
+                ? current.awayWins
+                : current.homeWins;
+
+            string seriesStr =
+                myWins > oppWins
+                    ? "Lead " + myWins + "-" + oppWins
+                    : myWins < oppWins
+                        ? "Trail " + myWins + "-" + oppWins
+                        : "Tied " + myWins + "-" + oppWins;
+
+            string gameInSeries =
+                "Game " + (current.gamesPlayed + 1) +
+                " of " + current.numGames;
+
+            AddText(dialog, "SeriesScore",
+                gameInSeries + "  •  " + seriesStr,
+                11, GOLD,
+                new Vector2(20, 306),
+                new Vector2(220, 22));
+
+            AddText(dialog, "SeriesDate",
+                current.month + " " + current.dayStart,
+                10, SUBTEXT,
+                new Vector2(-120, 306),
+                new Vector2(100, 22));
+        }
+        else if (gm.seasonComplete)
+        {
+            AddImage(dialog, "DoneBG",
+                new Color(0.05f, 0.15f, 0.05f, 1f),
+                new Vector2(0, 308),
+                new Vector2(374, 64));
+
+            AddText(dialog, "DoneLabel",
+                "REGULAR SEASON COMPLETE",
+                16, GREEN,
+                new Vector2(0, 313),
+                new Vector2(340, 32),
+                FontStyles.Bold);
+        }
+
+        // Section label — upcoming
+        AddText(dialog, "UpcomingLabel",
+            "UPCOMING SERIES",
+            10, SUBTEXT,
+            new Vector2(-130, 232),
+            new Vector2(180, 22),
+            FontStyles.Bold);
+
+        // Up to 5 upcoming series cards
+        List<ScheduledSeries> upcoming =
+            gm.GetUpcomingSeries(5);
+
+        // Skip the current one (already shown above)
+        if (current != null && upcoming.Count > 0 &&
+            upcoming[0] == current)
+            upcoming.RemoveAt(0);
+
+        // Limit to 4
+        if (upcoming.Count > 4)
+            upcoming = upcoming.GetRange(0, 4);
+
+        for (int i = 0; i < upcoming.Count; i++)
+        {
+            ScheduledSeries s = upcoming[i];
+            float cardY = 210f - (i * 58f);
+
+            GameObject card =
+                new GameObject("UpCard_" + i);
+            card.transform.SetParent(
+                dialog.transform, false);
+            RectTransform cRT =
+                card.AddComponent<RectTransform>();
+            cRT.anchoredPosition =
+                new Vector2(0, cardY);
+            cRT.sizeDelta =
+                new Vector2(374, 52);
+            card.AddComponent<Image>().color =
+                new Color(0.06f, 0.12f, 0.20f, 1f);
+
+            string oppAbbr =
+                s.homeTeam == selectedTeam
+                    ? s.awayTeam : s.homeTeam;
+            bool isHome =
+                s.homeTeam == selectedTeam;
+
+            string oppName = GetTeamFullName(oppAbbr);
+            string homeAway = isHome ? "vs" : "@";
+            string numGames =
+                s.numGames + "-game series";
+
+            AddTextToParent(card, "HmAw",
+                homeAway, 11, SUBTEXT,
+                new Vector2(-162f, 0f),
+                new Vector2(24f, 52f),
+                TextAlignmentOptions.Midline);
+
+            AddTextToParent(card, "Opp",
+                oppName, 13, TEXT,
+                new Vector2(-40f, 8f),
+                new Vector2(200f, 24f),
+                TextAlignmentOptions.MidlineLeft);
+
+            AddTextToParent(card, "Series",
+                numGames, 10, SUBTEXT,
+                new Vector2(-40f, -10f),
+                new Vector2(180f, 20f),
+                TextAlignmentOptions.MidlineLeft);
+
+            AddTextToParent(card, "Date",
+                s.month + " " + s.dayStart,
+                10, GOLD,
+                new Vector2(145f, 8f),
+                new Vector2(80f, 24f),
+                TextAlignmentOptions.MidlineRight);
+
+            AddTextToParent(card, "Abbr",
+                oppAbbr, 14, RED,
+                new Vector2(145f, -10f),
+                new Vector2(80f, 20f),
+                TextAlignmentOptions.MidlineRight);
+        }
+
+        // Section label — recent results
+        float recentY = 210f - (upcoming.Count * 58f) - 28f;
+
+        AddText(dialog, "RecentLabel",
+            "RECENT RESULTS",
+            10, SUBTEXT,
+            new Vector2(-130, recentY),
+            new Vector2(180, 22),
+            FontStyles.Bold);
+
+        // Up to 3 past series
+        List<ScheduledSeries> recent =
+            gm.GetRecentResults(3);
+
+        for (int i = 0; i < recent.Count; i++)
+        {
+            ScheduledSeries s = recent[i];
+            float cardY = recentY - 26f - (i * 52f);
+
+            GameObject card =
+                new GameObject("RecCard_" + i);
+            card.transform.SetParent(
+                dialog.transform, false);
+            RectTransform cRT =
+                card.AddComponent<RectTransform>();
+            cRT.anchoredPosition =
+                new Vector2(0, cardY);
+            cRT.sizeDelta =
+                new Vector2(374, 46);
+            card.AddComponent<Image>().color =
+                new Color(0.05f, 0.10f, 0.16f, 1f);
+
+            string oppAbbr =
+                s.homeTeam == selectedTeam
+                    ? s.awayTeam : s.homeTeam;
+            bool isHome =
+                s.homeTeam == selectedTeam;
+
+            int myWins = isHome
+                ? s.homeWins : s.awayWins;
+            int oppWins = isHome
+                ? s.awayWins : s.homeWins;
+
+            bool wonSeries = myWins > oppWins;
+            bool splitSeries = myWins == oppWins;
+
+            string result =
+                wonSeries ? "W" :
+                splitSeries ? "S" : "L";
+            Color resultColor =
+                wonSeries ? GREEN :
+                splitSeries ? GOLD : RED;
+
+            string oppName = GetTeamFullName(oppAbbr);
+            string homeAway = isHome ? "vs" : "@";
+            string seriesScore =
+                myWins + "-" + oppWins;
+
+            // Result badge
+            AddTextToParent(card, "Result",
+                result, 14, resultColor,
+                new Vector2(-162f, 0f),
+                new Vector2(24f, 46f),
+                TextAlignmentOptions.Midline);
+
+            AddTextToParent(card, "Opp",
+                homeAway + " " + oppName,
+                12, TEXT,
+                new Vector2(-30f, 6f),
+                new Vector2(190f, 22f),
+                TextAlignmentOptions.MidlineLeft);
+
+            AddTextToParent(card, "Score",
+                "Series " + seriesScore,
+                10, SUBTEXT,
+                new Vector2(-30f, -10f),
+                new Vector2(160f, 18f),
+                TextAlignmentOptions.MidlineLeft);
+
+            AddTextToParent(card, "Date",
+                s.month + " " + s.dayStart,
+                10, GOLD,
+                new Vector2(145f, 0f),
+                new Vector2(80f, 46f),
+                TextAlignmentOptions.MidlineRight);
+        }
+
+        // Play live game button at bottom
+        if (!gm.seasonComplete)
+        {
+            GameObject playBtn = CreateButton(dialog,
+                "PLAY NEXT GAME", RED, TEXT,
+                new Vector2(0, -340),
+                new Vector2(280, 56), 16);
+            GetButton(playBtn).onClick.AddListener(() =>
+            {
+                Destroy(dialog);
+                OnPlayLiveGame();
+            });
+        }
+    }
+
+    // Get full team name from abbreviation
+    string GetTeamFullName(string abbr)
+    {
+        if (dataLoader?.allTeams == null) return abbr;
+        Team t = dataLoader.allTeams.Find(
+            tm => tm.abbreviation == abbr);
+        return t != null
+            ? t.city + " " + t.nickname
+            : abbr;
+    }
+
 
     // -------------------------------------------------------
     // STANDINGS SCREEN
@@ -1531,6 +1922,354 @@ public class UIBuilder : MonoBehaviour
         return screen;
     }
 
+        void ShowSeasonCompleteDialog()
+    {
+        // Remove old dialog if exists
+        Transform old =
+            teamScreen.transform.Find("SeasonDoneDialog");
+        if (old != null) Destroy(old.gameObject);
+
+        GameObject dialog =
+            new GameObject("SeasonDoneDialog");
+        dialog.transform.SetParent(
+            teamScreen.transform, false);
+        RectTransform dRT =
+            dialog.AddComponent<RectTransform>();
+        dRT.anchoredPosition = Vector2.zero;
+        dRT.sizeDelta         = new Vector2(390, 844);
+        dialog.AddComponent<Image>().color =
+            new Color(0f, 0f, 0f, 0.92f);
+
+        GameManager gm =
+            FindFirstObjectByType<GameManager>();
+        bool madePlayoffs =
+            gm != null && gm.PlayerMadePlayoffs() == true;
+
+        AddText(dialog, "Title",
+            madePlayoffs
+                ? "YOU MADE THE PLAYOFFS!"
+                : "REGULAR SEASON OVER",
+            22, madePlayoffs ? GOLD : TEXT,
+            new Vector2(0, 120),
+            new Vector2(340, 48), FontStyles.Bold);
+
+        AddText(dialog, "Sub",
+            madePlayoffs
+                ? "Your team qualified for the postseason!"
+                : "Your team did not make the playoffs.",
+            14, SUBTEXT,
+            new Vector2(0, 75),
+            new Vector2(320, 30));
+
+        // Show player team record
+        Team myTeam = GetMyTeam();
+        if (myTeam != null)
+        {
+            AddText(dialog, "Record",
+                myTeam.abbreviation + "  " +
+                myTeam.wins + " - " + myTeam.losses,
+                28, madePlayoffs ? GREEN : RED,
+                new Vector2(0, 20),
+                new Vector2(300, 48), FontStyles.Bold);
+        }
+
+        if (madePlayoffs)
+        {
+            GameObject playoffBtn = CreateButton(dialog,
+                "START PLAYOFFS", RED, TEXT,
+                new Vector2(0, -60),
+                new Vector2(280, 56), 16);
+            GetButton(playoffBtn).onClick.AddListener(() =>
+            {
+                Destroy(dialog);
+                ShowPostseasonScreen();
+            });
+        }
+
+        GameObject standBtn = CreateButton(dialog,
+            "VIEW STANDINGS", SURFACE, GOLD,
+            new Vector2(0, madePlayoffs ? -130 : -60),
+            new Vector2(280, 56), 14);
+        AddBorder(standBtn, BORDER, 2);
+        GetButton(standBtn).onClick.AddListener(() =>
+        {
+            Destroy(dialog);
+            ShowScreen(standingsScreen);
+            ShowDivision(GetPlayerDivisionIndex());
+        });
+
+        GameObject closeBtn = CreateButton(dialog,
+            "CLOSE", SURFACE, SUBTEXT,
+            new Vector2(0, madePlayoffs ? -195 : -130),
+            new Vector2(180, 40), 12);
+        AddBorder(closeBtn, BORDER, 2);
+        GetButton(closeBtn).onClick.AddListener(() =>
+            Destroy(dialog));
+    }
+
+    void ShowPostseasonScreen()
+    {
+        GameManager gm =
+            FindFirstObjectByType<GameManager>();
+        if (gm == null) return;
+
+        List<Team> playoffs = gm.GetPlayoffTeams();
+
+        // Show a simple playoff bracket dialog
+        Transform old =
+            teamScreen.transform.Find("PlayoffDialog");
+        if (old != null) Destroy(old.gameObject);
+
+        GameObject dialog =
+            new GameObject("PlayoffDialog");
+        dialog.transform.SetParent(
+            teamScreen.transform, false);
+        RectTransform dRT =
+            dialog.AddComponent<RectTransform>();
+        dRT.anchoredPosition = Vector2.zero;
+        dRT.sizeDelta         = new Vector2(390, 844);
+        dialog.AddComponent<Image>().color =
+            new Color(0f, 0f, 0f, 0.95f);
+
+        AddText(dialog, "Title",
+            "2026 PLAYOFFS", 26, GOLD,
+            new Vector2(0, 360),
+            new Vector2(340, 48), FontStyles.Bold);
+
+        AddText(dialog, "Sub",
+            "12 teams — 3 rounds to the World Series",
+            12, SUBTEXT,
+            new Vector2(0, 325),
+            new Vector2(340, 24));
+
+        // AL teams
+        AddText(dialog, "ALLabel",
+            "AMERICAN LEAGUE", 13, RED,
+            new Vector2(-95, 285),
+            new Vector2(170, 28), FontStyles.Bold);
+
+        List<Team> alTeams = playoffs.FindAll(
+            t => t.league == "AL");
+        for (int i = 0; i < alTeams.Count && i < 6; i++)
+        {
+            bool isPlayer = alTeams[i].abbreviation ==
+                selectedTeam;
+            Color rowColor = isPlayer ? GOLD : TEXT;
+            string seed    = (i + 1).ToString();
+            AddText(dialog, "AL_" + i,
+                seed + "  " +
+                alTeams[i].city + " " +
+                alTeams[i].nickname +
+                "  " + alTeams[i].wins + "-" +
+                alTeams[i].losses,
+                11, rowColor,
+                new Vector2(-95, 255 - (i * 26)),
+                new Vector2(175, 24));
+        }
+
+        // NL teams
+        AddText(dialog, "NLLabel",
+            "NATIONAL LEAGUE", 13, RED,
+            new Vector2(95, 285),
+            new Vector2(170, 28), FontStyles.Bold);
+
+        List<Team> nlTeams = playoffs.FindAll(
+            t => t.league == "NL");
+        for (int i = 0; i < nlTeams.Count && i < 6; i++)
+        {
+            bool isPlayer = nlTeams[i].abbreviation ==
+                selectedTeam;
+            Color rowColor = isPlayer ? GOLD : TEXT;
+            string seed    = (i + 1).ToString();
+            AddText(dialog, "NL_" + i,
+                seed + "  " +
+                nlTeams[i].city + " " +
+                nlTeams[i].nickname +
+                "  " + nlTeams[i].wins + "-" +
+                nlTeams[i].losses,
+                11, rowColor,
+                new Vector2(95, 255 - (i * 26)),
+                new Vector2(175, 24));
+        }
+
+        // Simulate postseason button
+        GameObject simBtn = CreateButton(dialog,
+            "SIMULATE POSTSEASON", RED, TEXT,
+            new Vector2(0, -80),
+            new Vector2(280, 56), 15);
+        GetButton(simBtn).onClick.AddListener(() =>
+        {
+            Destroy(dialog);
+            SimulatePostseason(playoffs);
+        });
+
+        GameObject closeBtn = CreateButton(dialog,
+            "CLOSE", SURFACE, SUBTEXT,
+            new Vector2(0, -148),
+            new Vector2(180, 40), 12);
+        AddBorder(closeBtn, BORDER, 2);
+        GetButton(closeBtn).onClick.AddListener(() =>
+            Destroy(dialog));
+    }
+
+    void SimulatePostseason(List<Team> playoffs)
+    {
+        GameManager gm =
+            FindFirstObjectByType<GameManager>();
+        if (gm == null) return;
+
+        // Simple postseason simulation
+        // Wild card round (best of 3)
+        // Division series (best of 5)
+        // Championship series (best of 7)
+        // World Series (best of 7)
+
+        List<Team> alTeams = playoffs.FindAll(
+            t => t.league == "AL");
+        List<Team> nlTeams = playoffs.FindAll(
+            t => t.league == "NL");
+
+        Team alChamp = SimulateLeague(alTeams);
+        Team nlChamp = SimulateLeague(nlTeams);
+        Team wsWinner = SimulateSeries(
+            alChamp, nlChamp, 7);
+
+        // Show World Series result
+        Transform old =
+            teamScreen.transform.Find("WSDialog");
+        if (old != null) Destroy(old.gameObject);
+
+        GameObject dialog = new GameObject("WSDialog");
+        dialog.transform.SetParent(
+            teamScreen.transform, false);
+        RectTransform dRT =
+            dialog.AddComponent<RectTransform>();
+        dRT.anchoredPosition = Vector2.zero;
+        dRT.sizeDelta         = new Vector2(390, 844);
+        dialog.AddComponent<Image>().color =
+            new Color(0f, 0f, 0f, 0.95f);
+
+        bool playerWon = wsWinner.abbreviation ==
+            selectedTeam;
+
+        AddText(dialog, "Title",
+            "2026 WORLD SERIES CHAMPION",
+            18, GOLD,
+            new Vector2(0, 120),
+            new Vector2(340, 36), FontStyles.Bold);
+
+        AddText(dialog, "Team",
+            wsWinner.city.ToUpper() + "\n" +
+            wsWinner.nickname.ToUpper(),
+            36, playerWon ? GOLD : TEXT,
+            new Vector2(0, 30),
+            new Vector2(340, 100), FontStyles.Bold);
+
+        if (playerWon)
+        {
+            AddText(dialog, "Congrats",
+                "CONGRATULATIONS! YOU ARE WORLD SERIES CHAMPIONS!",
+                13, GREEN,
+                new Vector2(0, -50),
+                new Vector2(320, 40));
+        }
+        else
+        {
+            Team playerTeam = GetMyTeam();
+            string playerMsg = "Your " +
+                (playerTeam != null
+                    ? playerTeam.nickname : "team") +
+                " did not reach the World Series.";
+            AddText(dialog, "PlayerResult",
+                playerMsg, 13, SUBTEXT,
+                new Vector2(0, -50),
+                new Vector2(320, 36));
+        }
+
+        AddText(dialog, "WS",
+            alChamp.abbreviation + "  vs  " +
+            nlChamp.abbreviation,
+            16, SUBTEXT,
+            new Vector2(0, -95),
+            new Vector2(300, 28));
+
+        // New season button
+        GameObject newSeasonBtn = CreateButton(dialog,
+            "START NEW SEASON", RED, TEXT,
+            new Vector2(0, -160),
+            new Vector2(280, 56), 15);
+        GetButton(newSeasonBtn).onClick.AddListener(() =>
+        {
+            Destroy(dialog);
+            gm.SimulateOneSeason();
+            PopulateTeamScreen(GetMyTeam());
+        });
+
+        GameObject closeBtn = CreateButton(dialog,
+            "CLOSE", SURFACE, SUBTEXT,
+            new Vector2(0, -228),
+            new Vector2(180, 40), 12);
+        AddBorder(closeBtn, BORDER, 2);
+        GetButton(closeBtn).onClick.AddListener(() =>
+            Destroy(dialog));
+    }
+
+    // Simulate a league bracket and return champion
+    Team SimulateLeague(List<Team> teams)
+    {
+        if (teams.Count < 2) return teams[0];
+
+        // Seeds 4,5,6 play wild card (best of 3)
+        // Then 1v lowest, 2v next, 3v next (best of 5)
+        // Then winners (best of 7)
+
+        List<Team> remaining = new List<Team>(teams);
+
+        // Wild card — 4v5, 3v6 (best of 3)
+        if (remaining.Count >= 6)
+        {
+            Team wc1 = SimulateSeries(
+                remaining[3], remaining[4], 3);
+            Team wc2 = SimulateSeries(
+                remaining[2], remaining[5], 3);
+            remaining = new List<Team>
+            {
+                remaining[0], remaining[1], wc1, wc2
+            };
+        }
+
+        // Division series (best of 5)
+        // 1v4, 2v3
+        Team ds1 = SimulateSeries(
+            remaining[0], remaining[3], 5);
+        Team ds2 = SimulateSeries(
+            remaining[1], remaining[2], 5);
+
+        // Championship series (best of 7)
+        return SimulateSeries(ds1, ds2, 7);
+    }
+
+    // Simulate a series — higher overall wins more often
+    Team SimulateSeries(Team t1, Team t2, int bestOf)
+    {
+        int t1Wins = 0, t2Wins = 0;
+        int needed = (bestOf / 2) + 1;
+
+        // Calculate team strength
+        float t1Str = t1.wins + Random.Range(-5, 5);
+        float t2Str = t2.wins + Random.Range(-5, 5);
+        float t1WinPct = t1Str / (t1Str + t2Str);
+
+        while (t1Wins < needed && t2Wins < needed)
+        {
+            if (Random.value < t1WinPct) t1Wins++;
+            else                          t2Wins++;
+        }
+
+        return t1Wins > t2Wins ? t1 : t2;
+    }
+
+
     void ShowDivision(int divIndex)
     {
         currentDivision = divIndex;
@@ -1565,7 +2304,11 @@ public class UIBuilder : MonoBehaviour
         List<Team> divTeams = dataLoader.allTeams
             .FindAll(t => t.division == divName);
 
-        if (gm != null && gm.finalWins.Count > 0)
+        // Only apply saved standings if they belong
+        // to the current save slot (not a previous game)
+        if (gm != null &&
+            gm.finalWins.Count > 0 &&
+            !gm.seasonComplete == false)
         {
             foreach (Team t in divTeams)
             {
@@ -5410,8 +6153,15 @@ public class UIBuilder : MonoBehaviour
     {
         pgHomeTeam      = home;
         pgAwayTeam      = away;
-        pgShowingHome   = true;
-        pgGameNumber++;
+        pgShowingHome = true;
+        if (pgGameNumber == 1)
+        {
+            // Don't increment on very first game
+        }
+        else
+        {
+            pgGameNumber++;
+        }
 
         // Build optimal lineups
         pgHomeLineup = BuildOptimalLineup(home);

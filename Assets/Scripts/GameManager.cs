@@ -1,5 +1,21 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
+
+[System.Serializable]
+public class ScheduledSeries
+{
+    public string homeTeam;
+    public string awayTeam;
+    public int    numGames;
+    public int    gamesPlayed;
+    public int    homeWins;
+    public int    awayWins;
+    public bool   isComplete;
+    public string month;
+    public int    dayStart;
+}
+
 
 public class GameManager : MonoBehaviour
 {
@@ -12,18 +28,32 @@ public class GameManager : MonoBehaviour
     SeasonSimulator  seasonSimulator;
     FranchiseManager franchiseManager;
 
-    // Current save slot
     int currentSaveSlot = 0;
 
-    // Final standings saved before offseason resets
     public Dictionary<string, int> finalWins   =
         new Dictionary<string, int>();
     public Dictionary<string, int> finalLosses =
         new Dictionary<string, int>();
 
-    // Pitching rotation tracking per team
     Dictionary<string, int> teamRotationIndex =
         new Dictionary<string, int>();
+
+    // Schedule tracking
+    public int  totalGamesPlayed   = 0;
+    public int  maxGamesPerSeason  = 162;
+    public bool seasonComplete     = false;
+    public bool postseasonStarted  = false;
+
+    public string currentSeriesOpponent = "";
+    public int    currentSeriesGame     = 0;
+    public int    currentSeriesLength   = 0;
+    public int    seriesHomeWins        = 0;
+    public int    seriesAwayWins        = 0;
+
+    public List<ScheduledSeries> schedule =
+        new List<ScheduledSeries>();
+    public int currentSeriesIndex = 0;
+
 
     // -------------------------------------------------------
     // START
@@ -47,7 +77,6 @@ public class GameManager : MonoBehaviour
         gameObject.AddComponent<InjurySystem>();
         gameObject.AddComponent<SaveSystem>();
 
-        // Add roster builders upfront
         gameObject.AddComponent<RosterBuilder_ALEast>();
         gameObject.AddComponent<RosterBuilder_ALCentral>();
         gameObject.AddComponent<RosterBuilder_ALWest>();
@@ -58,16 +87,12 @@ public class GameManager : MonoBehaviour
         Invoke("RunSeason", 0.1f);
     }
 
-    // -------------------------------------------------------
-    // RUN SEASON — called on start
-    // -------------------------------------------------------
     void RunSeason()
     {
-        // Build rosters first
         BuildAllRosters();
-
-        // Start franchise
         franchiseManager.StartNewFranchise("NYA", "James", 1);
+        // Don't generate schedule here —
+        // wait until player picks their team
 
         Debug.Log("Rosters ready! Total teams: " +
                   dataLoader.allTeams.Count);
@@ -82,11 +107,9 @@ public class GameManager : MonoBehaviour
     // -------------------------------------------------------
     void BuildAllRosters()
     {
-        // Step 1 — Empty all rosters
         foreach (Team t in dataLoader.allTeams)
             t.roster = new List<Player>();
 
-        // Step 2 — Build real rosters
         gameObject.GetComponent<RosterBuilder_ALEast>()
             .BuildAllRosters(dataLoader.allTeams);
         gameObject.GetComponent<RosterBuilder_ALCentral>()
@@ -100,13 +123,11 @@ public class GameManager : MonoBehaviour
         gameObject.GetComponent<RosterBuilder_NLWest>()
             .BuildAllRosters(dataLoader.allTeams);
 
-        // Step 3 — Generate minor leagues
         MiLBGenerator milb =
             gameObject.GetComponent<MiLBGenerator>();
         if (milb != null)
             milb.GenerateAllMinorLeagues(dataLoader.allTeams);
 
-        // Step 4 — Log counts
         foreach (Team t in dataLoader.allTeams)
             Debug.Log(t.city + " " + t.nickname +
                       " roster: " + t.roster.Count + " players");
@@ -115,10 +136,24 @@ public class GameManager : MonoBehaviour
     }
 
     // -------------------------------------------------------
-    // START FRANCHISE — called by UI when team is selected
+    // START FRANCHISE
     // -------------------------------------------------------
     public void StartFranchise(string teamAbbr, string gmName)
     {
+        // Clear old standings from previous save
+        finalWins.Clear();
+        finalLosses.Clear();
+
+        // Reset all team records to 0-0
+        if (dataLoader?.allTeams != null)
+        {
+            foreach (Team t in dataLoader.allTeams)
+            {
+                t.wins   = 0;
+                t.losses = 0;
+            }
+        }
+
         franchiseManager.StartNewFranchise(teamAbbr, gmName, 1);
 
         Team playerTeam = dataLoader.allTeams.Find(
@@ -133,6 +168,326 @@ public class GameManager : MonoBehaviour
         Debug.Log("Budget: $" + playerTeam.budget + "M");
         Debug.Log("Roster: " + playerTeam.roster.Count +
                   " players");
+
+        GenerateSeasonSchedule();
+    }
+
+    // -------------------------------------------------------
+    // SCHEDULE GENERATOR
+    // -------------------------------------------------------
+    public void GenerateSeasonSchedule()
+    {
+        schedule.Clear();
+        currentSeriesIndex = 0;
+        totalGamesPlayed   = 0;
+        seasonComplete     = false;
+        postseasonStarted  = false;
+
+        if (dataLoader?.allTeams == null) return;
+
+        List<Team> allTeams = dataLoader.allTeams;
+
+        Team playerTeam = allTeams.Find(
+            t => t.abbreviation ==
+                 franchiseManager.franchise
+                     .playerTeamAbbreviation);
+        if (playerTeam == null) return;
+
+        List<Team> divRivals = allTeams.FindAll(
+            t => t.division == playerTeam.division &&
+                 t.abbreviation !=
+                     playerTeam.abbreviation);
+
+        List<Team> leagueOpponents = allTeams.FindAll(
+            t => t.league == playerTeam.league &&
+                 t.division != playerTeam.division);
+
+        List<Team> interleague = allTeams.FindAll(
+            t => t.league != playerTeam.league);
+
+        string[] months = {
+            "MAR","APR","MAY","JUN",
+            "JUL","AUG","SEP" };
+        int monthIdx = 0;
+        int day      = 25;
+
+        void AddSeries(Team home, Team away, int games)
+        {
+            schedule.Add(new ScheduledSeries
+            {
+                homeTeam    = home.abbreviation,
+                awayTeam    = away.abbreviation,
+                numGames    = games,
+                gamesPlayed = 0,
+                homeWins    = 0,
+                awayWins    = 0,
+                isComplete  = false,
+                month       = months[Mathf.Clamp(
+                    monthIdx, 0, months.Length - 1)],
+                dayStart    = day
+            });
+
+            day += games + 1;
+            if (day > 28)
+            {
+                day = 1;
+                monthIdx = Mathf.Min(
+                    monthIdx + 1, months.Length - 1);
+            }
+
+            if (months[Mathf.Clamp(monthIdx, 0,
+                months.Length - 1)] == "JUL" &&
+                day >= 11 && day <= 16)
+                day = 17;
+        }
+
+        // Division rivals — 13 games each (3+3+4+3)
+        foreach (Team rival in divRivals)
+        {
+            AddSeries(playerTeam, rival,     3);
+            AddSeries(rival,      playerTeam, 3);
+            AddSeries(playerTeam, rival,     4);
+            AddSeries(rival,      playerTeam, 3);
+        }
+
+        // League opponents — 6 or 7 games each
+        int lgIdx = 0;
+        foreach (Team opp in leagueOpponents)
+        {
+            bool isSeven = lgIdx % 5 == 0;
+            if (isSeven)
+            {
+                AddSeries(playerTeam, opp, 3);
+                AddSeries(opp, playerTeam, 4);
+            }
+            else
+            {
+                AddSeries(playerTeam, opp, 3);
+                AddSeries(opp, playerTeam, 3);
+            }
+            lgIdx++;
+        }
+
+        // Interleague — 3 games each
+        foreach (Team opp in interleague)
+        {
+            if (interleague.IndexOf(opp) % 2 == 0)
+                AddSeries(playerTeam, opp, 3);
+            else
+                AddSeries(opp, playerTeam, 3);
+        }
+
+        InterleaveSeries();
+
+        Debug.Log("Schedule generated: " +
+            schedule.Count + " series for " +
+            playerTeam.abbreviation);
+    }
+
+    void InterleaveSeries()
+    {
+        if (schedule.Count == 0) return;
+
+        List<ScheduledSeries> divSeries =
+            new List<ScheduledSeries>();
+        List<ScheduledSeries> lgSeries  =
+            new List<ScheduledSeries>();
+        List<ScheduledSeries> ilSeries  =
+            new List<ScheduledSeries>();
+
+        Team playerTeam = dataLoader.allTeams.Find(
+            t => t.abbreviation ==
+                 franchiseManager.franchise
+                     .playerTeamAbbreviation);
+
+        if (playerTeam == null) return;
+
+        foreach (ScheduledSeries s in schedule)
+        {
+            string oppAbbr =
+                s.homeTeam == playerTeam.abbreviation
+                    ? s.awayTeam : s.homeTeam;
+
+            Team opp = dataLoader.allTeams.Find(
+                t => t.abbreviation == oppAbbr);
+
+            if (opp == null) continue;
+
+            if (opp.division == playerTeam.division)
+                divSeries.Add(s);
+            else if (opp.league == playerTeam.league)
+                lgSeries.Add(s);
+            else
+                ilSeries.Add(s);
+        }
+
+        schedule.Clear();
+
+        int d = 0, l = 0, il = 0;
+
+        while (d < divSeries.Count ||
+               l < lgSeries.Count  ||
+               il < ilSeries.Count)
+        {
+            for (int i = 0; i < 2 && d < divSeries.Count; i++)
+                schedule.Add(divSeries[d++]);
+
+            if (l < lgSeries.Count)
+                schedule.Add(lgSeries[l++]);
+
+            if (il < ilSeries.Count)
+                schedule.Add(ilSeries[il++]);
+
+            if (l < lgSeries.Count)
+                schedule.Add(lgSeries[l++]);
+        }
+
+        // Re-assign dates
+        string[] months = {
+            "MAR","APR","MAY","JUN",
+            "JUL","AUG","SEP" };
+        int monthIdx = 0;
+        int day      = 25;
+
+        for (int i = 0; i < schedule.Count; i++)
+        {
+            schedule[i].month =
+                months[Mathf.Clamp(
+                    monthIdx, 0, months.Length - 1)];
+            schedule[i].dayStart = day;
+
+            day += schedule[i].numGames + 1;
+            if (day > 28)
+            {
+                day = 1;
+                monthIdx = Mathf.Min(
+                    monthIdx + 1, months.Length - 1);
+            }
+
+            if (monthIdx < months.Length &&
+                months[monthIdx] == "JUL" &&
+                day >= 11 && day <= 16)
+                day = 17;
+        }
+
+        Debug.Log("Schedule interleaved: " +
+            divSeries.Count + " div, " +
+            lgSeries.Count  + " league, " +
+            ilSeries.Count  + " interleague series");
+    }
+
+    // -------------------------------------------------------
+    // POSTSEASON
+    // -------------------------------------------------------
+    public void TriggerPostseason()
+    {
+        if (postseasonStarted) return;
+        postseasonStarted = true;
+
+        Debug.Log("SEASON COMPLETE — " +
+            totalGamesPlayed + " games played.");
+        Debug.Log("POSTSEASON STARTING!");
+
+        SaveFinalStandings();
+
+        List<Team> playoffTeams = GetPlayoffTeams();
+        string msg = "PLAYOFF TEAMS: ";
+        foreach (Team t in playoffTeams)
+            msg += t.abbreviation + " ";
+        Debug.Log(msg);
+    }
+
+    public List<Team> GetPlayoffTeams()
+    {
+        List<Team> playoffs = new List<Team>();
+
+        string[] leagues = { "AL", "NL" };
+        string[] divs    = { "East", "Central", "West" };
+
+        foreach (string league in leagues)
+        {
+            List<Team> wildcards = new List<Team>();
+
+            foreach (string div in divs)
+            {
+                string fullDiv = league + " " + div;
+                List<Team> divTeams =
+                    dataLoader.allTeams.FindAll(
+                        t => t.division == fullDiv);
+
+                divTeams = divTeams
+                    .OrderByDescending(t => t.wins)
+                    .ThenBy(t => t.losses)
+                    .ToList();
+
+                if (divTeams.Count > 0)
+                {
+                    playoffs.Add(divTeams[0]);
+                    for (int i = 1; i < divTeams.Count; i++)
+                        wildcards.Add(divTeams[i]);
+                }
+            }
+
+            wildcards = wildcards
+                .OrderByDescending(t => t.wins)
+                .ThenBy(t => t.losses)
+                .ToList();
+
+            for (int i = 0; i < 3 && i < wildcards.Count; i++)
+                playoffs.Add(wildcards[i]);
+        }
+
+        return playoffs;
+    }
+
+    public bool PlayerMadePlayoffs()
+    {
+        List<Team> teams = GetPlayoffTeams();
+        return teams.Exists(
+            t => t.abbreviation ==
+                 franchiseManager.franchise
+                     .playerTeamAbbreviation);
+    }
+
+    public int GamesRemaining()
+    {
+        return Mathf.Max(0,
+            maxGamesPerSeason - totalGamesPlayed);
+    }
+
+    public ScheduledSeries GetCurrentSeries()
+    {
+        if (schedule == null ||
+            currentSeriesIndex >= schedule.Count)
+            return null;
+        return schedule[currentSeriesIndex];
+    }
+
+    public List<ScheduledSeries> GetUpcomingSeries(int n)
+    {
+        List<ScheduledSeries> upcoming =
+            new List<ScheduledSeries>();
+        for (int i = currentSeriesIndex;
+             i < schedule.Count &&
+             upcoming.Count < n; i++)
+        {
+            // Include current AND future series
+            upcoming.Add(schedule[i]);
+        }
+        return upcoming;
+    }
+
+    public List<ScheduledSeries> GetRecentResults(int n)
+    {
+        List<ScheduledSeries> results =
+            new List<ScheduledSeries>();
+        for (int i = currentSeriesIndex - 1;
+             i >= 0 && results.Count < n; i--)
+        {
+            if (schedule[i].isComplete)
+                results.Add(schedule[i]);
+        }
+        return results;
     }
 
     // -------------------------------------------------------
@@ -156,7 +511,6 @@ public class GameManager : MonoBehaviour
         Debug.Log("     SIMULATING " + year + " SEASON");
         Debug.Log("==========================================");
 
-        // Set lineup and rotation
         LineupEditor lineupEditor =
             gameObject.GetComponent<LineupEditor>();
         if (lineupEditor != null)
@@ -167,29 +521,30 @@ public class GameManager : MonoBehaviour
                 lineupEditor.BuildOptimalRotation(playerTeam);
         }
 
-        // Generate schedule
+        // Reset season tracking
+        totalGamesPlayed  = 0;
+        seasonComplete    = false;
+        postseasonStarted = false;
+        GenerateSeasonSchedule();
+
         SeasonSchedule schedule =
             seasonScheduler.GenerateSchedule(
                 dataLoader.allTeams);
 
-        // Simulate season
         seasonSimulator.SimulateSeason(
             schedule, dataLoader.allTeams);
 
-        // Save standings before offseason resets
         SaveFinalStandings();
 
-        // Get results
         string wsWinner     = GetWorldSeriesWinner();
         string playerFinish = GetPlayerTeamFinish(
             dataLoader.allTeams,
             franchiseManager.franchise
             .playerTeamAbbreviation);
 
-        Debug.Log("Your finish: "   + playerFinish);
-        Debug.Log("World Series: "  + wsWinner);
+        Debug.Log("Your finish: "  + playerFinish);
+        Debug.Log("World Series: " + wsWinner);
 
-        // Run offseason
         OffseasonManager offseason =
             gameObject.GetComponent<OffseasonManager>();
         if (offseason != null)
@@ -199,10 +554,8 @@ public class GameManager : MonoBehaviour
                 wsWinner,
                 playerFinish);
 
-        // Auto save to current slot
         SaveGame(currentSaveSlot);
         Debug.Log("Auto-saved to slot " + currentSaveSlot);
-
         Debug.Log("Season " + year + " complete!");
         Debug.Log("Now in " +
                   franchiseManager.franchise.currentSeason);
@@ -234,7 +587,16 @@ public class GameManager : MonoBehaviour
             slot);
 
         if (loaded)
+        {
             Debug.Log("Loaded slot " + slot);
+
+            // Regenerate schedule after load
+            // so SCHEDULE screen has data
+            GenerateSeasonSchedule();
+
+            Debug.Log("Schedule regenerated after load: " +
+                schedule.Count + " series");
+        }
         return loaded;
     }
 
@@ -271,15 +633,9 @@ public class GameManager : MonoBehaviour
                new List<string> { "", "", "" };
     }
 
-    public int GetCurrentSaveSlot()
-    {
-        return currentSaveSlot;
-    }
+    public int GetCurrentSaveSlot() { return currentSaveSlot; }
 
-    public void SetSaveSlot(int slot)
-    {
-        currentSaveSlot = slot;
-    }
+    public void SetSaveSlot(int slot) { currentSaveSlot = slot; }
 
     // -------------------------------------------------------
     // STANDINGS
@@ -305,98 +661,183 @@ public class GameManager : MonoBehaviour
         string homeAbbr, int homeScore,
         string awayAbbr, int awayScore)
     {
+        bool homeWon = homeScore > awayScore;
+        string playerAbbr =
+            franchiseManager.franchise
+                .playerTeamAbbreviation;
+
         Team homeTeam = dataLoader.allTeams.Find(
             t => t.abbreviation == homeAbbr);
         Team awayTeam = dataLoader.allTeams.Find(
             t => t.abbreviation == awayAbbr);
 
-        if (homeTeam == null || awayTeam == null) return;
-
-        if (homeScore > awayScore)
+        if (homeTeam != null && awayTeam != null)
         {
-            homeTeam.wins++;
-            awayTeam.losses++;
-            Debug.Log("WIN: " + homeAbbr + " " +
-                      homeScore + " — " +
-                      awayAbbr + " " + awayScore);
+            if (homeWon)
+            {
+                homeTeam.wins++;
+                awayTeam.losses++;
+            }
+            else
+            {
+                awayTeam.wins++;
+                homeTeam.losses++;
+            }
+        }
+
+        bool playerIsHome = homeAbbr == playerAbbr;
+        bool playerWon    =
+            (playerIsHome && homeWon) ||
+            (!playerIsHome && !homeWon);
+
+        RecordSeriesGame(playerWon, playerIsHome);
+
+        // *** FIXED: only called ONCE ***
+        SimulateCPUGamesForDay();
+
+        Debug.Log("WIN: " + homeAbbr +
+                  " " + homeScore + " — " +
+                  awayAbbr + " " + awayScore);
+    }
+
+    public void RecordSeriesGame(
+        bool playerWon, bool playerIsHome)
+    {
+        if (schedule == null ||
+            currentSeriesIndex >= schedule.Count)
+        {
+            totalGamesPlayed++;
+            if (totalGamesPlayed >= maxGamesPerSeason)
+            {
+                seasonComplete = true;
+                TriggerPostseason();
+            }
+            return;
+        }
+
+        ScheduledSeries series =
+            schedule[currentSeriesIndex];
+        series.gamesPlayed++;
+        totalGamesPlayed++;
+
+        if (playerWon)
+        {
+            if (playerIsHome) series.homeWins++;
+            else              series.awayWins++;
         }
         else
         {
-            awayTeam.wins++;
-            homeTeam.losses++;
-            Debug.Log("WIN: " + awayAbbr + " " +
-                      awayScore + " — " +
-                      homeAbbr + " " + homeScore);
+            if (playerIsHome) series.awayWins++;
+            else              series.homeWins++;
         }
 
-        // Simulate CPU games for the day
-        SimulateCPUGamesForDay();
+        if (series.gamesPlayed >= series.numGames)
+        {
+            series.isComplete   = true;
+            currentSeriesIndex++;
+            Debug.Log("Series complete. Next: " +
+                currentSeriesIndex + " / " +
+                schedule.Count);
+        }
+
+        if (totalGamesPlayed >= maxGamesPerSeason ||
+            currentSeriesIndex >= schedule.Count)
+        {
+            seasonComplete = true;
+            TriggerPostseason();
+        }
+
+        Debug.Log("Games played: " +
+            totalGamesPlayed + " / " +
+            maxGamesPerSeason);
     }
 
-    // Simulate one day of CPU games
-    void SimulateCPUGamesForDay()
+    // -------------------------------------------------------
+    // CPU GAME SIMULATION — called ONCE per player game
+    // -------------------------------------------------------
+    public void SimulateCPUGamesForDay()
     {
-        List<Team> cpuTeams = dataLoader.allTeams.FindAll(
-            t => t.abbreviation !=
-                 franchiseManager.franchise
-                 .playerTeamAbbreviation);
+        if (dataLoader?.allTeams == null) return;
 
-        // Shuffle teams for random matchups
-        for (int i = cpuTeams.Count - 1; i > 0; i--)
-        {
-            int  j      = Random.Range(0, i + 1);
-            Team tmp    = cpuTeams[i];
-            cpuTeams[i] = cpuTeams[j];
-            cpuTeams[j] = tmp;
-        }
+        string playerAbbr =
+            franchiseManager.franchise
+                .playerTeamAbbreviation;
 
-        int gamesPlayed = 0;
-        for (int i = 0; i + 1 < cpuTeams.Count; i += 2)
+        // All non-player teams sorted by fewest games played
+        List<Team> cpuTeams = dataLoader.allTeams
+            .FindAll(t => t.abbreviation != playerAbbr);
+
+        cpuTeams.Sort((a, b) =>
+            (a.wins + a.losses).CompareTo(b.wins + b.losses));
+
+        HashSet<string> playedToday =
+            new HashSet<string>();
+
+        int gamesSimmed = 0;
+
+        for (int i = 0; i < cpuTeams.Count; i++)
         {
             Team home = cpuTeams[i];
-            Team away = cpuTeams[i + 1];
+            if (playedToday.Contains(home.abbreviation))
+                continue;
 
-            float homeStr  = GetTeamStrength(home);
-            float awayStr  = GetTeamStrength(away);
-            float total    = homeStr + awayStr;
-            float homeAdv  = total * 0.54f;
-            float roll     = Random.Range(0f, total);
+            // Find opponent with fewest games played
+            Team away     = null;
+            int  fewest   = int.MaxValue;
 
-            // Advance rotation for both teams
-            AdvanceRotation(home.abbreviation);
-            AdvanceRotation(away.abbreviation);
+            for (int j = i + 1; j < cpuTeams.Count; j++)
+            {
+                Team candidate = cpuTeams[j];
+                if (playedToday.Contains(
+                    candidate.abbreviation)) continue;
 
-            if (roll < homeAdv)
+                int gp = candidate.wins + candidate.losses;
+                if (gp < fewest)
+                {
+                    fewest = gp;
+                    away   = candidate;
+                }
+            }
+
+            if (away == null) continue;
+
+            playedToday.Add(home.abbreviation);
+            playedToday.Add(away.abbreviation);
+
+            float homeStr =
+                home.wins + home.losses > 0
+                    ? (float)home.wins /
+                      (home.wins + home.losses)
+                    : 0.5f;
+            float awayStr =
+                away.wins + away.losses > 0
+                    ? (float)away.wins /
+                      (away.wins + away.losses)
+                    : 0.5f;
+
+            float winPct =
+                (homeStr + 0.04f) /
+                (homeStr + awayStr + 0.04f);
+
+            if (Random.value < winPct)
             {
                 home.wins++;
                 away.losses++;
-                // Credit CPU pitcher stats
                 CreditCPUPitcherStats(home, away, true);
             }
             else
             {
                 away.wins++;
                 home.losses++;
-                // Credit CPU pitcher stats
                 CreditCPUPitcherStats(away, home, false);
             }
 
-            gamesPlayed++;
+            gamesSimmed++;
         }
 
-        Debug.Log("CPU games simulated: " + gamesPlayed);
-    }
-
-    // Get average overall rating for a team
-    float GetTeamStrength(Team t)
-    {
-        if (t.roster == null || t.roster.Count == 0)
-            return 50f;
-
-        float total = 0f;
-        foreach (Player p in t.roster)
-            total += p.overall;
-        return total / t.roster.Count;
+        Debug.Log("CPU games simulated: " +
+            gamesSimmed + " (" +
+            playedToday.Count + " teams played)");
     }
 
     // -------------------------------------------------------
@@ -417,12 +858,10 @@ public class GameManager : MonoBehaviour
         return teamRotationIndex[teamAbbr];
     }
 
-    // Simulate basic pitcher stats for CPU games
     void CreditCPUPitcherStats(
         Team winTeam, Team loseTeam, bool homeWon)
     {
-        // Find starters
-        Player winSP = null;
+        Player winSP  = null;
         Player loseSP = null;
 
         if (winTeam.roster != null)
@@ -449,35 +888,30 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        // Simulate realistic game stats
         if (winSP != null)
         {
-            // Winner starter: 5-7 IP, 0-2 ER
             int ip = Random.Range(5, 8);
             int er = Random.Range(0, 3);
-            winSP.seasonInningsPitched += ip;
-            winSP.seasonEarnedRuns     += er;
+            winSP.seasonInningsPitched   += ip;
+            winSP.seasonEarnedRuns       += er;
             winSP.seasonWins++;
             winSP.wins++;
 
-            // K's based on pitching rating
             int k = Mathf.RoundToInt(
                 ip * (winSP.pitching / 99f) * 1.5f) +
                 Random.Range(0, 3);
             winSP.seasonStrikeoutsThrown += k;
 
-            // Hits allowed
             int h = Random.Range(3, ip + 2);
             winSP.seasonHitsAllowed += h;
         }
 
         if (loseSP != null)
         {
-            // Loser starter: 4-6 IP, 2-5 ER
             int ip = Random.Range(4, 7);
             int er = Random.Range(2, 6);
-            loseSP.seasonInningsPitched += ip;
-            loseSP.seasonEarnedRuns     += er;
+            loseSP.seasonInningsPitched   += ip;
+            loseSP.seasonEarnedRuns       += er;
             loseSP.seasonLosses++;
             loseSP.losses++;
 
@@ -490,12 +924,10 @@ public class GameManager : MonoBehaviour
             loseSP.seasonHitsAllowed += h;
         }
 
-        // Simulate batter stats too
         SimulateCPUBatterStats(winTeam,  true);
         SimulateCPUBatterStats(loseTeam, false);
     }
 
-    // Simulate basic batter stats for CPU games
     void SimulateCPUBatterStats(Team team, bool won)
     {
         if (team?.roster == null) return;
@@ -504,20 +936,10 @@ public class GameManager : MonoBehaviour
             p => p.position != "SP" &&
                  p.position != "RP");
 
-        int teamHits = won
-            ? Random.Range(6, 13)
-            : Random.Range(3, 9);
-
-        int teamRuns = won
-            ? Random.Range(2, 8)
-            : Random.Range(0, 4);
-
-        // Distribute hits across lineup
         foreach (Player b in batters)
         {
             b.seasonAtBats += Random.Range(3, 5);
 
-            // More hits for better hitters
             float hitChance =
                 (b.contact / 99f) * 0.35f + 0.15f;
             if (Random.value < hitChance)
@@ -525,7 +947,6 @@ public class GameManager : MonoBehaviour
                 b.seasonHits++;
                 b.seasonSingles++;
 
-                // HR chance
                 if (Random.value <
                     b.power / 99f * 0.08f)
                 {
@@ -536,7 +957,10 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        // Distribute RBI to top hitters
+        int teamRuns = won
+            ? Random.Range(2, 8)
+            : Random.Range(0, 4);
+
         if (batters.Count > 0)
         {
             batters.Sort((a, b2) =>
@@ -551,8 +975,6 @@ public class GameManager : MonoBehaviour
             }
         }
     }
-
-
 
     // -------------------------------------------------------
     // TRADE SYSTEM
@@ -607,27 +1029,21 @@ public class GameManager : MonoBehaviour
     {
         List<Player> pool = new List<Player>();
 
-        string[] positions = new string[]
-        {
+        string[] positions = {
             "SP", "SP", "RP", "RP",
             "C", "1B", "2B", "3B", "SS",
-            "LF", "CF", "RF", "DH"
-        };
+            "LF", "CF", "RF", "DH" };
 
-        string[] firstNames = new string[]
-        {
+        string[] firstNames = {
             "Carlos", "Jose", "Miguel", "Alex", "Ryan",
             "Tyler", "Jake", "Kyle", "Chase", "Hunter",
-            "Marcus", "Andre", "Kevin", "Derek", "Luis"
-        };
+            "Marcus", "Andre", "Kevin", "Derek", "Luis" };
 
-        string[] lastNames = new string[]
-        {
+        string[] lastNames = {
             "Garcias", "Martinezz", "Rodrigues", "Wilsons",
             "Andersons", "Thomass", "Harriss", "Martins",
             "Moores", "Taylors", "Lees", "Perezz", "Scotts",
-            "Adamss", "Nelsons"
-        };
+            "Adamss", "Nelsons" };
 
         for (int i = 0; i < 20; i++)
         {
