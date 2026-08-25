@@ -1,0 +1,1 @@
+Baseball Manager Pro is a stat-driven baseball management simulation inspired by OOTP Baseball, built for mobile. You play as General Manager of a fictional MLB-style franchise, making every decision across a full 162-game season.
